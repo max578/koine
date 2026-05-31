@@ -71,6 +71,10 @@ lens_spec <- function(id, label, tier, independence_key, role, exactness,
 .feat_glm_only <- list(random_effects = FALSE, distributional = FALSE,
                        nonlinear = FALSE)
 
+# Feature support for a mixed-model lens (single random intercept).
+.feat_re_intercept <- list(random_effects = TRUE, distributional = FALSE,
+                           nonlinear = FALSE)
+
 #' The Stage-1 enrolment registry (leanest cut)
 #'
 #' @return A list of `koine_lens_spec` records.
@@ -167,6 +171,38 @@ koine_stage1_registry <- function() {
       fit_fn = fit_ridge, implemented = TRUE, structure_variant = TRUE
     ),
     lens_spec(
+      id = "glmm_marginal",
+      label = "Marginal mixed model (random-walk, RE integrated out)",
+      tier = 1L, independence_key = list(family = "random_walk",
+                                         kernel = "glmm-marginal-quadrature"),
+      role = "opinion", exactness = "approximate",
+      maturity_tier = "koine-implemented-validated",
+      # Validated (SBC + concordance) for gaussian + binomial. The Poisson
+      # quadrature path is implemented and tested for correctness, but is NOT
+      # enrolled: under the default N(0, 5) coefficient prior the log-link
+      # Poisson prior-predictive is pathological (counts ~1e22+), so SBC cannot
+      # validate it (see the validation cairn). A family-appropriate count prior
+      # + re-validation is the recorded next step.
+      family_support = function(fs) fs$name %in% c("gaussian", "binomial"),
+      feature_support = .feat_re_intercept, emits_loglik = FALSE,
+      fit_fn = fit_glmm_marginal, implemented = TRUE,
+      validation_ref = "r-package/2026-05-31-koine-re-lens-sbc-validation"
+    ),
+    lens_spec(
+      id = "nimble_glmm",
+      label = "NIMBLE GLMM Gibbs (random effects sampled)",
+      tier = 1L, independence_key = list(family = "gibbs",
+                                         kernel = "nimble-mwg-glmm"),
+      role = "opinion", exactness = "exact",
+      maturity_tier = "reference-validated",
+      # Mixed-model support is gaussian + binomial this increment, matching the
+      # validated marginal lens (a single Poisson RE lens could not form a
+      # diverse opinion anyway). The NIMBLE GLMM code itself handles Poisson.
+      family_support = function(fs) fs$name %in% c("gaussian", "binomial"),
+      feature_support = .feat_re_intercept, emits_loglik = FALSE,
+      fit_fn = fit_nimble_glmm, implemented = TRUE
+    ),
+    lens_spec(
       id = "bridge_evidence",
       label = "Marginal-likelihood evidence axis (bridge sampling)",
       tier = 1L, independence_key = list(family = "evidence",
@@ -226,6 +262,24 @@ resolve_battery <- function(pass, registry = koine_stage1_registry()) {
       reason <- sprintf("tier %d not in allowed_tiers", L$tier)
     } else if (!isTRUE(L$family_support(pass$family))) {
       reason <- sprintf("family '%s' unsupported by lens", pass$family$name)
+    } else if (isTRUE(pass$has_re) &&
+                 !isTRUE(L$feature_support$random_effects)) {
+      # A population-level lens cannot honour a random-effects formula; it is
+      # excluded with a recorded reason rather than silently fitting the wrong
+      # (fixed-effects-only) model (I1).
+      reason <- "feature_unsupported: lens has no random-effects support"
+    } else if (!isTRUE(pass$has_re) &&
+                 isTRUE(L$feature_support$random_effects)) {
+      # A mixed-model lens needs a random-effects term; on a population pass it
+      # is the population lenses that apply.
+      reason <- "feature_unsupported: lens requires a random-effects term"
+    } else if (isTRUE(pass$has_re) &&
+                 isTRUE(L$feature_support$random_effects) &&
+                 !isTRUE(pass$re_supported)) {
+      # The random-effects structure (random slopes, multiple or crossed/nested
+      # groupings) is outside this build's single-random-intercept support.
+      reason <- paste0("feature_unsupported: only a single random intercept ",
+                       "on one grouping factor is supported")
     } else if (needs_ll && !L$emits_loglik &&
                  is.null(pass$family$loglik_pointwise)) {
       reason <- "log_likelihood required but not producible"

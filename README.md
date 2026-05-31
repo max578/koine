@@ -56,6 +56,15 @@ The battery spans three diversity axes: inference-family witnesses (DRAM,
 NIMBLE-Gibbs, Polya-Gamma Gibbs, DREAM_ZS), a heavy-tail structure variant
 (robust-t), and a shrinkage spectrum (ridge / lasso / horseshoe).
 
+koine also handles a single random intercept `(1 | g)` --- for the Gaussian LMM
+and the binomial GLMM --- on an axis orthogonal to the sealed engines:
+NIMBLE-Gibbs *samples* the random effects while the marginal lens *integrates*
+them out (exactly for the Gaussian LMM, by Gauss-Hermite quadrature for a GLMM).
+Both are stacked on the same per-observation integrated predictive, which keeps
+the leave-one-out gate reliable; richer random-effects structure is refused
+(`feature_unsupported`) rather than fitted as the wrong model. (A Poisson GLMM
+path is implemented but held experimental --- see the validation study.)
+
 ### Validation
 
 koine-authored lenses must clear a correctness gate before they may corroborate:

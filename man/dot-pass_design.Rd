@@ -2,7 +2,7 @@
 % Please edit documentation in R/pass.R
 \name{.pass_design}
 \alias{.pass_design}
-\title{Build the design matrix for a pass (population-level terms)}
+\title{Build the design matrix for a pass (fixed-effects terms)}
 \usage{
 .pass_design(pass)
 }
@@ -10,9 +10,11 @@
 \item{pass}{A \code{koine_pass}.}
 }
 \value{
-A list with \code{X} (model matrix), \code{y} (response vector), and \code{N}.
+A list with \code{X} (model matrix), \code{y} (response vector), \code{N}, and \code{K}.
 }
 \description{
-Build the design matrix for a pass (population-level terms)
+Uses the pass's fixed-effects formula (random-effects terms stripped), so the
+population-level design matrix is identical whether or not the pass carries a
+random intercept.
 }
 \keyword{internal}

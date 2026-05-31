@@ -109,6 +109,42 @@ real weight, and the diversity diagnostic reports more than one effective
 component. That spread is the orthogonal-diversity signal --- the fourth opinion
 is sensitive to model structure, not a weighted echo of a single posterior.
 
+## Mixed models: a random intercept
+
+koine also handles a single random intercept, `(1 | g)`. The opinion is built on
+an axis orthogonal to the sealed engines: NIMBLE-Gibbs (`fit_nimble_glmm()`)
+*samples* the random effects, while the marginal lens (`fit_glmm_marginal()`,
+shown here because it needs no extra toolchain) *integrates* them out --- exactly
+for the Gaussian LMM, by Gauss-Hermite quadrature for the binomial GLMM. Both
+report `(beta, sigma, tau)` and are stacked on the same per-observation
+*integrated* predictive (the random effect marginalised under each draw's
+variance components), which keeps the leave-one-out gate reliable. (A Poisson
+path is implemented but held experimental pending a family-appropriate prior.)
+
+```{r re}
+set.seed(20)
+g <- factor(rep(1:25, each = 6))
+xr <- rnorm(150)
+b <- rnorm(25, 0, 1.1)                              # group random intercepts
+yr <- 1 + 0.5 * xr + b[g] + rnorm(150, 0, 0.7)
+pass_re <- koine_pass(yr ~ xr + (1 | g),
+                      data.frame(yr = yr, xr = xr, g = g), gaussian())
+
+fit_re <- fit_glmm_marginal(pass_re, n_iter = 2000L, n_burn = 1000L,
+                            n_chains = 2L)
+posterior::summarise_draws(fit_re$draws, "mean")    # recovers beta, sigma, tau
+```
+
+Richer structure is refused rather than fitted as the wrong model: a random
+slope, or more than one grouping factor, makes koine abstain
+`feature_unsupported`.
+
+```{r re-abstain}
+pass_bad <- koine_pass(yr ~ xr + (xr | g),
+                       data.frame(yr = yr, xr = xr, g = g), gaussian())
+synthesise(pass_bad)$reason
+```
+
 ## When koine abstains
 
 Abstention is a first-class outcome, not an error. If fewer than two

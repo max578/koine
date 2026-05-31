@@ -54,13 +54,28 @@ assemble_loglik <- function(fb_fits, pass) {
                   "draws lack the expected b_<col> coefficient variables.")
     }
     beta <- mat[, bcols, drop = FALSE]
-    eta <- beta %*% t(design$X)                       # S x N linear predictor
+    eta <- beta %*% t(design$X)                       # S x N fixed predictor
     has_sigma <- "sigma" %in% colnames(mat)
+    # Random-effects branch: stack on the per-observation INTEGRATED predictive
+    # (the random effect marginalised under each draw's tau), not conditional
+    # log-likelihood --- so every RE lens predicts the identical held-out
+    # quantity and the PSIS gate stays in its reliable regime (Stage-2).
+    re <- isTRUE(pass$has_re)
+    if (re && !("tau" %in% colnames(mat))) {
+      koine_abort("obs_axis_mismatch",
+                  "random-effects draws lack the expected tau variable.")
+    }
+    gh <- if (re) .gh_rule() else NULL
+    tau <- if (re) mat[, "tau"] else NULL
     S <- nrow(mat)
     ll <- matrix(NA_real_, nrow = S, ncol = design$N)
     for (s in seq_len(S)) {
       aux <- if (has_sigma) list(sigma = mat[s, "sigma"]) else list()
-      ll[s, ] <- pass$family$loglik_pointwise(design$y, eta[s, ], aux)
+      ll[s, ] <- if (re) {
+        .re_integrated_loglik(pass$family, design$y, eta[s, ], tau[s], aux, gh)
+      } else {
+        pass$family$loglik_pointwise(design$y, eta[s, ], aux)
+      }
     }
     colnames(ll) <- obs_id                             # A3 alignment
     out[[fit$provenance$method]] <- list(ll = ll, chain_id = chain_id)
@@ -242,6 +257,14 @@ synthesise <- function(pass, registry = koine_stage1_registry(),
                        on_degenerate = c("flag", "abstain")) {
   on_degenerate <- match.arg(on_degenerate)
   stopifnot(inherits(pass, "koine_pass"))
+  if (isTRUE(pass$has_re) && !isTRUE(pass$re_supported)) {
+    return(abstention(
+      "feature_unsupported", scope = "synthesis",
+      detail = paste0(
+        "the random-effects structure is outside this build's support ",
+        "(a single random intercept on one grouping factor); koine abstains ",
+        "rather than mis-modelling it.")))
+  }
   resolved <- resolve_battery(pass, registry)
   opinion <- Filter(function(L) identical(L$role, "opinion"),
                     resolved$enrolled)

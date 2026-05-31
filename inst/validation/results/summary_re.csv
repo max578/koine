@@ -1,0 +1,4 @@
+"lens","family","n_eff_sims","sbc_min_p","sbc_passed","concordance_median","concordance_pass","verdict"
+"glmm_marginal","gaussian",100,0.0298823579450798,TRUE,0.121325899763601,TRUE,"koine-implemented-validated"
+"glmm_marginal","binomial",100,0.143939690620056,TRUE,0.250703284739171,TRUE,"koine-implemented-validated"
+"glmm_marginal","poisson",100,7.47659247893403e-27,FALSE,0.254916613476342,TRUE,"experimental"

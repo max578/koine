@@ -93,8 +93,111 @@ run_validation_study <- function(out_dir = NULL, n_sims = 160L, n_keep = 64L,
   summ
 }
 
+## ----------------------------------------------------------------------------
+## Mixed-model (random-intercept) lens validation (Stage-2).
+##
+## glmm_marginal is koine-authored, so it must clear the gate before it may
+## contribute. Two criteria are used:
+##   * Simulation-based calibration (SBC; Talts et al. 2018) on (beta, sigma,
+##     tau) --- AUTHORITATIVE, including the variance component. Data are
+##     simulated from the full generative model (draw tau, b_g ~ N(0, tau^2),
+##     y), and the lens targets the marginal posterior; rank uniformity on
+##     (beta, sigma, tau) is the correct criterion because marginalising b is
+##     exact.
+##   * Cross-implementation concordance against nimble_glmm --- NIMBLE samples
+##     the random effects (Gibbs) and is reference-validated; the marginal lens
+##     integrates them out (quadrature). Two independent implementations of the
+##     same marginal posterior must agree to within posterior noise. This stands
+##     in for the grid-exact reference-posterior check used for the population
+##     lenses: that check (a uniform-grid Riemann integral) is reliable for a
+##     low-dimensional population posterior but numerically fragile for the
+##     marginal mixed-model posterior (the weakly-identified variance component
+##     makes the grid reference's SD collapse intermittently), so it is NOT used
+##     as an RE criterion --- recorded here explicitly, never silently dropped.
+## Cross-ENGINE concordance (the three sealed engines) remains the third SS11
+## criterion, deferred to graduation as for every koine lens.
+## ----------------------------------------------------------------------------
+
+run_re_validation_study <- function(out_dir = NULL, n_sims = 120L,
+                                    n_keep = 64L, n_conc = 6L, alpha = 0.05,
+                                    conc_tol = 0.5,
+                                    families = c("gaussian", "binomial",
+                                                 "poisson"),
+                                    verbose = TRUE) {
+  if (is.null(out_dir)) {
+    out_dir <- system.file("validation", package = "koine")
+    if (!nzchar(out_dir)) out_dir <- file.path("inst", "validation")
+  }
+  res_dir <- file.path(out_dir, "results")
+  dir.create(res_dir, showWarnings = FALSE, recursive = TRUE)
+  ctrl <- list(n_iter = 4000L, n_burn = 2000L, n_chains = 3L)
+  have_nimble <- requireNamespace("nimble", quietly = TRUE)
+
+  # Cross-implementation concordance: do the marginal (quadrature) and NIMBLE
+  # (sampled-b) lenses agree on the marginal posterior? Standardised by NIMBLE's
+  # posterior SD; the max over (beta, sigma, tau), median over datasets.
+  concordance <- function(fam) {
+    if (!have_nimble) {
+      return(list(available = FALSE, disc = NA_real_, pass = NA))
+    }
+    sm <- koine_lens_validation_setup("glmm_marginal", family = fam,
+                                      n_groups = 15L, n_per_group = 6L,
+                                      fit_control = ctrl)
+    disc <- vapply(seq_len(n_conc), function(i) {
+      g <- sm$generate(800000L + i)
+      fm <- sm$fit_fn(g$pass)
+      fn <- fit_nimble_glmm(g$pass, n_iter = ctrl$n_iter, n_burn = ctrl$n_burn,
+                            n_chains = ctrl$n_chains)
+      if (is_abstention(fm) || is_abstention(fn)) return(NA_real_)
+      a <- posterior::summarise_draws(fm$draws, mean = mean)
+      b <- posterior::summarise_draws(fn$draws, mean = mean, sd = stats::sd)
+      max(abs(a$mean - b$mean) / pmax(b$sd, 1e-6))
+    }, numeric(1))
+    disc <- disc[is.finite(disc)]
+    list(available = TRUE, disc = stats::median(disc),
+         pass = length(disc) > 0L && stats::median(disc) < conc_tol)
+  }
+
+  rows <- list()
+  for (fam in families) {
+    if (verbose) message("== glmm_marginal / ", fam, " ==")
+    setup <- koine_lens_validation_setup("glmm_marginal", family = fam,
+                                         n_groups = 15L, n_per_group = 6L,
+                                         fit_control = ctrl)
+    sbc <- sbc_check(setup$generate, setup$fit_fn, setup$param_names,
+                     n_sims = n_sims, n_keep = n_keep, n_bins = 8L,
+                     alpha = alpha, seed = 20260531L)
+    conc <- concordance(fam)
+    # Gate: SBC is authoritative; concordance must also hold where checkable.
+    verdict <- if (sbc$passed &&
+                     (!isTRUE(conc$available) || isTRUE(conc$pass))) {
+      "koine-implemented-validated"
+    } else {
+      "experimental"
+    }
+    out <- list(lens = "glmm_marginal", family = fam, sbc = sbc,
+                concordance = conc, verdict = verdict)
+    saveRDS(out, file.path(res_dir, paste0("sbc_glmm_marginal_", fam, ".rds")))
+    rows[[length(rows) + 1L]] <- data.frame(
+      lens = "glmm_marginal", family = fam, n_eff_sims = sbc$n_eff_sims,
+      sbc_min_p = min(sbc$uniformity$p_value), sbc_passed = sbc$passed,
+      concordance_median = conc$disc, concordance_pass = conc$pass,
+      verdict = verdict, stringsAsFactors = FALSE)
+    if (verbose) {
+      message(sprintf(
+        "   SBC min p = %.3f (pass=%s); concordance median = %.3f (pass=%s) -> %s",
+        min(sbc$uniformity$p_value), sbc$passed, conc$disc, conc$pass, verdict))
+    }
+  }
+  summ <- do.call(rbind, rows)
+  saveRDS(summ, file.path(res_dir, "summary_re.rds"))
+  utils::write.csv(summ, file.path(res_dir, "summary_re.csv"), row.names = FALSE)
+  summ
+}
+
 # Auto-run only when executed as a script (Rscript), not when source()d --- when
 # sourced, sys.nframe() > 0 and the caller invokes run_validation_study() itself.
 if (sys.nframe() == 0L) {
   print(run_validation_study())
+  print(run_re_validation_study())
 }

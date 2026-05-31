@@ -16,8 +16,11 @@ koine_pass(
 )
 }
 \arguments{
-\item{formula}{A model formula (population-level terms; random effects and
-distributional terms are a later stage).}
+\item{formula}{A model formula. Population-level terms, optionally with a
+single \code{lme4}-style random intercept \code{(1 | g)} on one grouping factor.
+Richer random-effects structure (random slopes, multiple or crossed/nested
+groupings, correlated effects) is parsed and flagged unsupported so the
+battery abstains non-silently rather than fitting the wrong model.}
 
 \item{data}{A data frame holding every column referenced in \code{formula}.}
 

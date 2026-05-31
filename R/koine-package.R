@@ -22,5 +22,5 @@
 # The NIMBLE lens writes its model in NIMBLE's BUGS dialect inside nimbleCode();
 # the tokens below are NIMBLE model-language symbols, not R objects, so they are
 # declared here to keep `R CMD check` from flagging them as undefined globals.
-utils::globalVariables(c("K", "N", "X", "log_sigma", "inprod",
-                         "log<-", "logit<-"))
+utils::globalVariables(c("K", "N", "X", "G", "log_sigma", "log_tau", "tau",
+                         "b", "group", "inprod", "log<-", "logit<-"))

@@ -4,7 +4,13 @@
 \alias{evidence_axis}
 \title{Evidence-axis diagnostic (Stage-0 SS9.3)}
 \usage{
-evidence_axis(fb_fits, pass, beta_prior_sd = 5, log_sigma_prior_sd = 2)
+evidence_axis(
+  fb_fits,
+  pass,
+  beta_prior_sd = 5,
+  log_sigma_prior_sd = 2,
+  log_tau_prior_sd = 2
+)
 }
 \arguments{
 \item{fb_fits}{A list of contributed \code{koine_fb_fit} objects.}
@@ -16,6 +22,9 @@ lenses' weakly-informative default).}
 
 \item{log_sigma_prior_sd}{Prior SD on log-sigma for Gaussian families
 (default 2).}
+
+\item{log_tau_prior_sd}{Prior SD on log-tau for mixed-model passes (default
+2, matching the RE lenses' weakly-informative default).}
 }
 \value{
 A list with \code{available} (logical), \code{prior_conditional} (always TRUE),

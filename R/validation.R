@@ -306,12 +306,18 @@ lens_effective_maturity <- function(lens_spec) {
 #' recorded validation study; SBC simulates from the model returned here, so the
 #' calibration test sees the lens's own `{prior, model, sampler}` triple.
 #'
-#' @param lens_id One of `"dram"`, `"pg_gibbs"`, `"robust_t"`.
-#' @param n_obs Observations per simulated dataset.
+#' @param lens_id One of `"dram"`, `"pg_gibbs"`, `"robust_t"` (population)
+#'   or `"glmm_marginal"`, `"nimble_glmm"` (mixed-model lenses).
+#' @param n_obs Observations per simulated dataset (population lenses).
 #' @param n_pred Number of predictors beyond the intercept.
 #' @param nu Student-t degrees of freedom for `"robust_t"` (the generative model
 #'   and the sampler share this value).
 #' @param fit_control A list of sampler controls passed to the lens fit.
+#' @param family For the mixed-model lenses, the response family
+#'   (`"gaussian"`, `"binomial"`, or `"poisson"`); ignored by the population
+#'   lenses, which carry their own family.
+#' @param n_groups Number of random-effect groups (mixed-model lenses).
+#' @param n_per_group Observations per group (mixed-model lenses).
 #' @return A list with `generate`, `fit_fn`, `param_names`, and `reference`.
 #' @examples
 #' setup <- koine_lens_validation_setup("dram")
@@ -321,10 +327,19 @@ koine_lens_validation_setup <- function(lens_id, n_obs = 40L, n_pred = 1L,
                                         nu = 4,
                                         fit_control = list(n_iter = 1500L,
                                                            n_burn = 750L,
-                                                           n_chains = 2L)) {
+                                                           n_chains = 2L),
+                                        family = c("gaussian", "binomial",
+                                                   "poisson"),
+                                        n_groups = 12L, n_per_group = 6L) {
   bcols <- .val_bcols(n_pred)
   beta_sd <- 5
   log_sigma_sd <- 2
+
+  if (lens_id %in% c("glmm_marginal", "nimble_glmm")) {
+    return(.re_validation_setup(lens_id, match.arg(family), n_pred, bcols,
+                                beta_sd, log_sigma_sd, n_groups, n_per_group,
+                                fit_control))
+  }
 
   if (lens_id == "pg_gibbs") {
     has_sigma <- FALSE
@@ -418,4 +433,140 @@ koine_lens_validation_setup <- function(lens_id, n_obs = 40L, n_pred = 1L,
   }
   list(generate = generate, fit_fn = fit_fn, param_names = pnames,
        reference = reference)
+}
+
+## -- mixed-model validation setup --------------------------------------------
+##
+## SBC for the RE lenses ranks (beta, sigma, tau) against the prior draws, with
+## data simulated from the full generative model (draw tau, draw b_g ~ N(0,
+## tau^2), simulate y). Both RE lenses target the *marginal* posterior p(beta,
+## sigma, tau | y) --- the marginal lens by quadrature/analytic integration, the
+## NIMBLE lens by sampling b and reporting only (beta, sigma, tau). Because
+## marginalising b is exact, rank uniformity on (beta, sigma, tau) is correct
+## SBC criterion for both. The grid-exact reference is built on the same
+## random-effects MARGINAL log-posterior (`.re_group_marginal_loglik` + priors,
+## with the log-sigma / log-tau Jacobians), so it never scores the population
+## model by mistake (I1).
+
+.re_validation_setup <- function(lens_id, family, n_pred, bcols, beta_sd,
+                                 log_sigma_sd, n_groups, n_per_group,
+                                 fit_control) {
+  has_sigma <- family == "gaussian"
+  log_tau_sd <- 2
+  pnames <- c(bcols, if (has_sigma) "sigma", "tau")
+  fam_obj <- switch(family, gaussian = stats::gaussian(),
+                    binomial = stats::binomial(), poisson = stats::poisson())
+  fit_lens <- if (lens_id == "glmm_marginal") {
+    fit_glmm_marginal
+  } else {
+    fit_nimble_glmm
+  }
+  re_formula <- stats::as.formula(paste(
+    "y ~", paste(c(paste0("x", seq_len(n_pred)), "(1 | g)"), collapse = " + ")))
+
+  generate <- function(seed) {
+    set.seed(seed)
+    n_obs <- n_groups * n_per_group
+    grp <- factor(rep(seq_len(n_groups), each = n_per_group))
+    dx <- .val_design_X(n_obs, n_pred)
+    beta <- stats::rnorm(n_pred + 1L, 0, beta_sd)
+    tau <- exp(stats::rnorm(1, 0, log_tau_sd))
+    b <- stats::rnorm(n_groups, 0, tau)
+    eta <- as.numeric(dx$X %*% beta) + b[grp]
+    sigma <- if (has_sigma) exp(stats::rnorm(1, 0, log_sigma_sd)) else NA_real_
+    y <- switch(family,
+                gaussian = stats::rnorm(n_obs, eta, sigma),
+                binomial = stats::rbinom(n_obs, 1L, stats::plogis(eta)),
+                poisson  = stats::rpois(n_obs, exp(eta)))
+    df <- cbind(data.frame(y = y), dx$df_pred, g = grp)
+    pass <- koine_pass(re_formula, df, fam_obj, seed = as.integer(seed))
+    theta <- c(beta, if (has_sigma) sigma, tau)
+    list(theta = stats::setNames(theta, pnames), pass = pass)
+  }
+
+  fit_fn <- function(pass) {
+    do.call(fit_lens, c(list(pass = pass), fit_control))
+  }
+
+  reference <- function(g, n_pts = 15L) {
+    design <- .pass_design(g$pass)
+    redesign <- .pass_re_design(g$pass)
+    gh <- .gh_rule()
+    lp <- function(theta) {
+      beta <- theta[bcols]
+      eta <- as.numeric(design$X %*% beta)
+      aux <- list()
+      jac <- stats::dnorm(log(theta[["tau"]]), 0, log_tau_sd, log = TRUE) -
+        log(theta[["tau"]])
+      if (has_sigma) {
+        aux$sigma <- theta[["sigma"]]
+        jac <- jac +
+          stats::dnorm(log(theta[["sigma"]]), 0, log_sigma_sd, log = TRUE) -
+          log(theta[["sigma"]])
+      }
+      ll <- .re_group_marginal_loglik(g$pass$family, design$y, eta,
+                                      redesign$group, theta[["tau"]], aux, gh)
+      ll + sum(stats::dnorm(beta, 0, beta_sd, log = TRUE)) + jac
+    }
+    list(log_post_unnorm = lp,
+         grid = .re_val_grid(g$pass, has_sigma, n_pred, n_pts))
+  }
+
+  list(generate = generate, fit_fn = fit_fn, param_names = pnames,
+       reference = reference)
+}
+
+# Grid for the RE reference posterior, uniformly spaced (the reference
+# integrator [reference_posterior_check()] assumes a uniform measure) and
+# DATA-DRIVEN so it brackets the marginal posterior tightly: a coarse,
+# sd(y)-scaled window leaves the sharp mixed-model marginal in a handful of
+# cells, collapsing the reference SD and exploding the standardised discrepancy.
+# Coefficients centre on the population GLM fit (+/- 4 clustering-inflated SEs);
+# the residual SD (sigma) and random-intercept SD (tau) centre on
+# method-of-moments estimates from the group-mean decomposition. The location
+# parameters (beta, sigma) are then resolved well enough to check against the
+# exact grid reference; the weakly-identified tau is resolved only to grid
+# accuracy, with SBC ([sbc_check()]) as its authoritative validation.
+.re_val_grid <- function(pass, has_sigma, n_pred, n_pts) {
+  design <- .pass_design(pass)
+  redesign <- .pass_re_design(pass)
+  bcols <- .val_bcols(n_pred)
+  fit <- suppressWarnings(tryCatch(
+    stats::glm.fit(design$X, design$y, family = .pass_glm_family(pass)),
+    error = function(e) NULL))
+  if (is.null(fit)) {
+    cf <- rep.int(0, design$K)
+    se <- rep.int(1, design$K)
+  } else {
+    cf <- stats::coef(fit)
+    cf[!is.finite(cf)] <- 0
+    xtwx_inv <- tryCatch(
+      chol2inv(chol(crossprod(design$X * sqrt(fit$weights)))),
+      error = function(e) NULL)
+    # raw residual dispersion (it absorbs the random-effect variance) gives a
+    # conservatively wide coefficient SE for the clustered marginal.
+    disp <- sum((design$y - fit$fitted.values)^2) / max(1L, design$N - design$K)
+    se <- if (is.null(xtwx_inv)) {
+      rep.int(1, design$K)
+    } else {
+      sqrt(pmax(diag(xtwx_inv) * disp, 1e-4))
+    }
+  }
+  se[!is.finite(se) | se <= 0] <- 1
+  grid <- lapply(seq_len(design$K), function(k) {
+    seq(cf[k] - 4 * se[k], cf[k] + 4 * se[k], length.out = n_pts)
+  })
+  names(grid) <- bcols
+  # method-of-moments variance components from the group-mean decomposition.
+  gm <- tapply(design$y - as.numeric(design$X %*% cf), redesign$group, mean)
+  tau_hat <- max(0.1, stats::sd(gm))
+  grid[["tau"]] <- seq(max(1e-2, tau_hat * 0.2), tau_hat * 2.6,
+                       length.out = n_pts)
+  if (has_sigma) {
+    resid <- design$y - as.numeric(design$X %*% cf) - gm[redesign$group]
+    sig_hat <- max(0.1, stats::sd(resid))
+    grid[["sigma"]] <- seq(max(1e-2, sig_hat * 0.4), sig_hat * 1.9,
+                           length.out = n_pts)
+  }
+  grid
 }

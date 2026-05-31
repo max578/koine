@@ -9,13 +9,17 @@ koine_lens_validation_setup(
   n_obs = 40L,
   n_pred = 1L,
   nu = 4,
-  fit_control = list(n_iter = 1500L, n_burn = 750L, n_chains = 2L)
+  fit_control = list(n_iter = 1500L, n_burn = 750L, n_chains = 2L),
+  family = c("gaussian", "binomial", "poisson"),
+  n_groups = 12L,
+  n_per_group = 6L
 )
 }
 \arguments{
-\item{lens_id}{One of \code{"dram"}, \code{"pg_gibbs"}, \code{"robust_t"}.}
+\item{lens_id}{One of \code{"dram"}, \code{"pg_gibbs"}, \code{"robust_t"} (population)
+or \code{"glmm_marginal"}, \code{"nimble_glmm"} (mixed-model lenses).}
 
-\item{n_obs}{Observations per simulated dataset.}
+\item{n_obs}{Observations per simulated dataset (population lenses).}
 
 \item{n_pred}{Number of predictors beyond the intercept.}
 
@@ -23,6 +27,14 @@ koine_lens_validation_setup(
 and the sampler share this value).}
 
 \item{fit_control}{A list of sampler controls passed to the lens fit.}
+
+\item{family}{For the mixed-model lenses, the response family
+(\code{"gaussian"}, \code{"binomial"}, or \code{"poisson"}); ignored by the population
+lenses, which carry their own family.}
+
+\item{n_groups}{Number of random-effect groups (mixed-model lenses).}
+
+\item{n_per_group}{Observations per group (mixed-model lenses).}
 }
 \value{
 A list with \code{generate}, \code{fit_fn}, \code{param_names}, and \code{reference}.

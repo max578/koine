@@ -150,6 +150,8 @@ linear_pool_envelope <- function(fb_fits, pass, inflate = 2, level = 0.95) {
 #'   lenses' weakly-informative default).
 #' @param log_sigma_prior_sd Prior SD on log-sigma for Gaussian families
 #'   (default 2).
+#' @param log_tau_prior_sd Prior SD on log-tau for mixed-model passes (default
+#'   2, matching the RE lenses' weakly-informative default).
 #' @return A list with `available` (logical), `prior_conditional` (always TRUE),
 #'   and, when available, `evidence` (a data frame of `lens_id`, `log_ml`,
 #'   `log_ml_se`) plus `note`. `role` is documented as `"diagnostic"`.
@@ -163,7 +165,7 @@ linear_pool_envelope <- function(fb_fits, pass, inflate = 2, level = 0.95) {
 #' }
 #' @export
 evidence_axis <- function(fb_fits, pass, beta_prior_sd = 5,
-                          log_sigma_prior_sd = 2) {
+                          log_sigma_prior_sd = 2, log_tau_prior_sd = 2) {
   if (!requireNamespace("bridgesampling", quietly = TRUE)) {
     return(list(available = FALSE, prior_conditional = TRUE,
                 role = "diagnostic",
@@ -172,6 +174,13 @@ evidence_axis <- function(fb_fits, pass, beta_prior_sd = 5,
   design <- .pass_design(pass)
   has_sigma <- identical(pass$family$name, "gaussian")
   bcols <- paste0("b_", colnames(design$X))
+  # For a mixed-model pass the comparable evidence is the RE MARGINAL
+  # likelihood (the RE integrated out under each lens's tau), the quantity both
+  # RE lenses' (beta, sigma, tau) draws actually target --- never the population
+  # likelihood, which would score the wrong model (I1).
+  re <- isTRUE(pass$has_re)
+  redesign <- if (re) .pass_re_design(pass) else NULL
+  gh <- if (re) .gh_rule() else NULL
 
   log_post_unnorm <- function(theta, data) {
     beta <- theta[bcols]
@@ -183,7 +192,15 @@ evidence_axis <- function(fb_fits, pass, beta_prior_sd = 5,
       aux$sigma <- exp(log_sigma)
       lp_extra <- stats::dnorm(log_sigma, 0, log_sigma_prior_sd, log = TRUE)
     }
-    ll <- sum(pass$family$loglik_pointwise(design$y, eta, aux))
+    if (re) {
+      log_tau <- theta[["log_tau"]]
+      lp_extra <- lp_extra +
+        stats::dnorm(log_tau, 0, log_tau_prior_sd, log = TRUE)
+      ll <- .re_group_marginal_loglik(pass$family, design$y, eta,
+                                      redesign$group, exp(log_tau), aux, gh)
+    } else {
+      ll <- sum(pass$family$loglik_pointwise(design$y, eta, aux))
+    }
     prior_beta <- sum(stats::dnorm(beta, 0, beta_prior_sd, log = TRUE))
     ll + prior_beta + lp_extra
   }
@@ -203,18 +220,20 @@ evidence_axis <- function(fb_fits, pass, beta_prior_sd = 5,
     if (!all(bcols %in% colnames(mat))) {
       next
     }
-    keep <- bcols
     lb <- stats::setNames(rep(-Inf, length(bcols)), bcols)
     ub <- stats::setNames(rep(Inf, length(bcols)), bcols)
+    samples <- mat[, bcols, drop = FALSE]
     if (has_sigma) {
       if (!"sigma" %in% colnames(mat)) next
-      samples <- cbind(mat[, bcols, drop = FALSE],
-                       log_sigma = log(mat[, "sigma"]))
-      keep <- c(bcols, "log_sigma")
+      samples <- cbind(samples, log_sigma = log(mat[, "sigma"]))
       lb <- c(lb, log_sigma = -Inf)
       ub <- c(ub, log_sigma = Inf)
-    } else {
-      samples <- mat[, bcols, drop = FALSE]
+    }
+    if (re) {
+      if (!"tau" %in% colnames(mat)) next
+      samples <- cbind(samples, log_tau = log(mat[, "tau"]))
+      lb <- c(lb, log_tau = -Inf)
+      ub <- c(ub, log_tau = Inf)
     }
     br <- tryCatch(
       bridgesampling::bridge_sampler(
