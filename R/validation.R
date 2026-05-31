@@ -335,9 +335,10 @@ koine_lens_validation_setup <- function(lens_id, n_obs = 40L, n_pred = 1L,
   beta_sd <- 5
   log_sigma_sd <- 2
 
-  if (lens_id %in% c("glmm_marginal", "nimble_glmm")) {
-    return(.re_validation_setup(lens_id, match.arg(family), n_pred, bcols,
-                                beta_sd, log_sigma_sd, n_groups, n_per_group,
+  if (lens_id %in% c("glmm_marginal", "nimble_glmm", "glmm_robust_re")) {
+    fam <- if (lens_id == "glmm_robust_re") "gaussian" else match.arg(family)
+    return(.re_validation_setup(lens_id, fam, n_pred, bcols, beta_sd,
+                                log_sigma_sd, n_groups, n_per_group,
                                 fit_control))
   }
 
@@ -452,15 +453,25 @@ koine_lens_validation_setup <- function(lens_id, n_obs = 40L, n_pred = 1L,
                                  log_sigma_sd, n_groups, n_per_group,
                                  fit_control) {
   has_sigma <- family == "gaussian"
-  log_tau_sd <- 2
+  # SBC must simulate from the lens's ACTUAL (family-appropriate) prior, so the
+  # {prior, model, sampler} triple is the one being validated.
+  prior <- .re_prior(family)
+  beta_sd <- prior$beta_sd
+  log_sigma_sd <- prior$log_sigma_sd
+  log_tau_sd <- prior$log_tau_sd
   pnames <- c(bcols, if (has_sigma) "sigma", "tau")
   fam_obj <- switch(family, gaussian = stats::gaussian(),
                     binomial = stats::binomial(), poisson = stats::poisson())
-  fit_lens <- if (lens_id == "glmm_marginal") {
-    fit_glmm_marginal
-  } else {
-    fit_nimble_glmm
-  }
+  # the robust-RE lens assumes Student-t random effects; its SBC must simulate
+  # the random effects from t_nu (its own generative model) and the reference
+  # must use the t-RE marginal --- otherwise the {prior, model, sampler} triple
+  # being validated is not the lens's own.
+  is_robust <- lens_id == "glmm_robust_re"
+  nu <- 4
+  fit_lens <- switch(lens_id,
+                     glmm_marginal = fit_glmm_marginal,
+                     nimble_glmm = fit_nimble_glmm,
+                     glmm_robust_re = fit_glmm_robust_re)
   re_formula <- stats::as.formula(paste(
     "y ~", paste(c(paste0("x", seq_len(n_pred)), "(1 | g)"), collapse = " + ")))
 
@@ -471,7 +482,11 @@ koine_lens_validation_setup <- function(lens_id, n_obs = 40L, n_pred = 1L,
     dx <- .val_design_X(n_obs, n_pred)
     beta <- stats::rnorm(n_pred + 1L, 0, beta_sd)
     tau <- exp(stats::rnorm(1, 0, log_tau_sd))
-    b <- stats::rnorm(n_groups, 0, tau)
+    b <- if (is_robust) {
+      stats::rt(n_groups, df = nu) * tau
+    } else {
+      stats::rnorm(n_groups, 0, tau)
+    }
     eta <- as.numeric(dx$X %*% beta) + b[grp]
     sigma <- if (has_sigma) exp(stats::rnorm(1, 0, log_sigma_sd)) else NA_real_
     y <- switch(family,
@@ -504,8 +519,13 @@ koine_lens_validation_setup <- function(lens_id, n_obs = 40L, n_pred = 1L,
           stats::dnorm(log(theta[["sigma"]]), 0, log_sigma_sd, log = TRUE) -
           log(theta[["sigma"]])
       }
-      ll <- .re_group_marginal_loglik(g$pass$family, design$y, eta,
-                                      redesign$group, theta[["tau"]], aux, gh)
+      ll <- if (is_robust) {
+        .re_group_marginal_t(design$y, eta, redesign$group, theta[["tau"]],
+                             theta[["sigma"]], nu)
+      } else {
+        .re_group_marginal_loglik(g$pass$family, design$y, eta,
+                                  redesign$group, theta[["tau"]], aux, gh)
+      }
       ll + sum(stats::dnorm(beta, 0, beta_sd, log = TRUE)) + jac
     }
     list(log_post_unnorm = lp,

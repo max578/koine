@@ -59,11 +59,15 @@ NIMBLE-Gibbs, Polya-Gamma Gibbs, DREAM_ZS), a heavy-tail structure variant
 koine also handles a single random intercept `(1 | g)` --- for the Gaussian LMM
 and the binomial GLMM --- on an axis orthogonal to the sealed engines:
 NIMBLE-Gibbs *samples* the random effects while the marginal lens *integrates*
-them out (exactly for the Gaussian LMM, by Gauss-Hermite quadrature for a GLMM).
-Both are stacked on the same per-observation integrated predictive, which keeps
-the leave-one-out gate reliable; richer random-effects structure is refused
-(`feature_unsupported`) rather than fitted as the wrong model. (A Poisson GLMM
-path is implemented but held experimental --- see the validation study.)
+them out (exactly for the Gaussian LMM, by adaptive Gauss-Hermite quadrature for
+a GLMM). A third lens gives the random intercepts heavy (Student-t) tails, so
+where the Gaussian-RE lenses corroborate it earns stacking weight when group
+effects are outlying --- koine's RE opinion is sensitive to random-effect
+structure, not a weighted echo of one assumption. All are stacked on the same
+per-observation integrated predictive, which keeps the leave-one-out gate
+reliable; richer random-effects structure is refused (`feature_unsupported`)
+rather than fitted as the wrong model. (A Poisson GLMM path is implemented but
+held experimental --- see the validation study.)
 
 ### Validation
 

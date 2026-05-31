@@ -19,18 +19,34 @@
   out (exact for the Gaussian LMM, Gauss-Hermite quadrature for a GLMM) --- and
   `fit_nimble_glmm()` --- NIMBLE Gibbs that samples the random effects. The two
   carry identical priors, so their agreement is method-independent consensus.
-  Enrolled (validated) for the Gaussian LMM and the binomial GLMM. The Poisson
-  GLMM quadrature is implemented and tested for correctness but held
-  experimental: under the default coefficient prior its prior-predictive is
-  pathological, so calibration (SBC) cannot yet be established --- it is not
-  enrolled (see the validation study).
+  Enrolled (validated) for the Gaussian LMM and the binomial GLMM.
+* A third, heavy-tailed random-effect lens, `fit_glmm_robust_re()`: a Gaussian
+  LMM whose random intercepts are Student-t (`b_g ~ t_nu`), integrated out via
+  the Normal scale-mixture (Gauss-Laguerre over the mixing scale). It is the
+  within-battery analogue of the population robust-t lens --- where the two
+  Gaussian-RE lenses corroborate (weights collapse), the t-RE lens earns real
+  stacking weight when group effects are heavy-tailed, so koine's RE opinion
+  becomes sensitive to random-effect structure rather than a weighted echo of
+  one assumption.
+* Adaptive Gauss-Hermite quadrature for the non-Gaussian random-effect marginal
+  (per-group Newton mode-finding + curvature-scaled nodes, closed-form
+  canonical-link scores added to `family_spec`). Fixed Gauss-Hermite is
+  non-convergent for the sharply-peaked Poisson count integrand; adaptive
+  Gauss-Hermite is accurate to ~1e-3 across the prior range and makes the
+  binomial GLMM validate more accurately.
+* Family-appropriate weakly-informative priors (`.re_prior()`): the log-link
+  Poisson uses a tighter coefficient / random-intercept-SD prior than the
+  Gaussian and binomial families, whose `N(0, 5)` prior is fine.
 * `assemble_loglik()` and `evidence_axis()` gained random-effects branches built
-  on a single shared marginalisation core (the per-observation integrated
-  predictive and the per-group marginal likelihood).
-* The validation harness covers the mixed-model lenses (`koine_lens_validation_setup()`
-  family / grouping arguments); the marginal lens is validated by SBC plus
-  cross-implementation concordance against NIMBLE for the Gaussian and binomial
-  families (recorded study in `inst/validation/`).
+  on a single shared marginalisation core.
+* The validation harness covers all three mixed-model lenses; they are validated
+  by SBC plus cross-implementation concordance against NIMBLE (recorded study in
+  `inst/validation/`). The Poisson GLMM remains held experimental and is not
+  enrolled: adaptive Gauss-Hermite fixed its marginal-likelihood quadrature (its
+  variance
+  component and slope now calibrate), but the random-walk sampler mixes the
+  strongly-confounded count intercept too poorly for SBC to pass --- a
+  better-mixing sampler is the recorded next step.
 
 ## Stage-1 --- the synthesis spine
 

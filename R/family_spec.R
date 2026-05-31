@@ -28,6 +28,13 @@
 #'   family support.
 #' @param aux_params Character vector naming the auxiliary parameters (e.g.
 #'   `"sigma"` for Gaussian, none for Binomial).
+#' @param dlp_deta Optional function `(y, eta, aux)` returning the first
+#'   derivative of the pointwise log-likelihood with respect to the linear
+#'   predictor (the canonical-link score), used by adaptive Gauss-Hermite
+#'   quadrature to locate the random-effect integrand's mode.
+#' @param d2lp_deta2 Optional function `(y, eta, aux)` returning the second
+#'   derivative (the negative observed information), used for the quadrature's
+#'   curvature scaling.
 #' @return An object of class `koine_family_spec`.
 #' @seealso [as_family_spec()]
 #' @examples
@@ -44,7 +51,8 @@
 #' fs$loglik_pointwise(c(0, 1), c(0, 1), list(sigma = 1))
 #' @export
 family_spec <- function(name, link, linkinv, loglik_pointwise, rng,
-                        support_check, aux_params = character(0)) {
+                        support_check, aux_params = character(0),
+                        dlp_deta = NULL, d2lp_deta2 = NULL) {
   stopifnot(
     is.character(name), length(name) == 1L,
     is.character(link), length(link) == 1L,
@@ -55,7 +63,8 @@ family_spec <- function(name, link, linkinv, loglik_pointwise, rng,
   structure(
     list(name = name, link = link, aux_params = aux_params,
          linkinv = linkinv, loglik_pointwise = loglik_pointwise,
-         rng = rng, support_check = support_check),
+         rng = rng, support_check = support_check,
+         dlp_deta = dlp_deta, d2lp_deta2 = d2lp_deta2),
     class = "koine_family_spec"
   )
 }
@@ -119,7 +128,9 @@ as_family_spec <- function(family, trials = NULL) {
     rng = function(eta, aux) {
       stats::rnorm(length(eta), mean = linkinv(eta), sd = aux$sigma)
     },
-    support_check = function(y) is.numeric(y) && all(is.finite(y))
+    support_check = function(y) is.numeric(y) && all(is.finite(y)),
+    dlp_deta = function(y, eta, aux) (y - linkinv(eta)) / aux$sigma^2,
+    d2lp_deta2 = function(y, eta, aux) rep(-1 / aux$sigma^2, length(y))
   )
 }
 
@@ -138,6 +149,16 @@ as_family_spec <- function(family, trials = NULL) {
     },
     support_check = function(y) {
       all(is.finite(y)) && all(y >= 0) && all(y == round(y))
+    },
+    # canonical logit-link score / information (n = trials)
+    dlp_deta = function(y, eta, aux) {
+      n <- if (is.null(trials)) rep.int(1L, length(y)) else trials
+      y - n * linkinv(eta)
+    },
+    d2lp_deta2 = function(y, eta, aux) {
+      n <- if (is.null(trials)) rep.int(1L, length(y)) else trials
+      p <- linkinv(eta)
+      -n * p * (1 - p)
     }
   )
 }
@@ -155,7 +176,10 @@ as_family_spec <- function(family, trials = NULL) {
     },
     support_check = function(y) {
       all(is.finite(y)) && all(y >= 0) && all(y == round(y))
-    }
+    },
+    # canonical log-link score / information
+    dlp_deta = function(y, eta, aux) y - linkinv(eta),
+    d2lp_deta2 = function(y, eta, aux) -linkinv(eta)
   )
 }
 

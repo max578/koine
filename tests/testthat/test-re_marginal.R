@@ -92,3 +92,49 @@ test_that("as tau -> 0 the integrated predictive collapses to the conditional", 
                                                 aux = list())
   expect_equal(q0, fb$loglik_pointwise(1, 0.2, list()), tolerance = 1e-6)
 })
+
+test_that("adaptive GH makes the Poisson group marginal converge across tau", {
+  fp <- as_family_spec(poisson())
+  yg <- c(1, 7, 1, 2, 9, 4)
+  eg <- c(0.1, -0.2, 0.3, 0, 0.5, -0.1)
+  for (tau in c(0.5, 1, 1.5, 2, 3, 4)) {
+    aghq <- koine:::.re_group_marginal_loglik(fp, yg, eg, rep(1L, 6), tau,
+                                              list(), koine:::.gh_rule(20L))
+    brute <- log(stats::integrate(function(b) {
+      vapply(b, function(z) prod(stats::dpois(yg, exp(eg + z))), numeric(1)) *
+        stats::dnorm(b, 0, tau)
+    }, -Inf, Inf, rel.tol = 1e-10)$value)
+    expect_equal(aghq, brute, tolerance = 1e-3)
+  }
+})
+
+test_that("Gauss-Laguerre rule integrates against x^alpha exp(-x)", {
+  gl <- koine:::.gl_rule(32L, alpha = 1.5)
+  expect_equal(sum(gl$weights), gamma(2.5))
+  expect_equal(sum(gl$weights * gl$nodes), gamma(3.5))
+})
+
+test_that("Student-t scale-mixture marginals match direct integration", {
+  nu <- 4
+  mix <- koine:::.t_mix_rule(nu, 32L)
+  expect_equal(sum(mix$weight), 1)
+  expect_equal(sum(mix$weight * mix$lambda), 1)        # Gamma(a, a) mean 1
+  tau <- 1.3
+  sigma <- 0.7
+  # per-observation predictive (b ~ tau * t_nu)
+  got <- koine:::.re_integrated_loglik_t(0.4, 0.1, tau, sigma, nu, mix)
+  brute <- log(stats::integrate(
+    function(b) stats::dnorm(0.4, 0.1 + b, sigma) * stats::dt(b / tau, nu) / tau,
+    -Inf, Inf)$value)
+  expect_equal(got, brute, tolerance = 1e-4)
+  # per-group marginal
+  set.seed(1)
+  yg <- stats::rnorm(3)
+  eg <- c(0.1, -0.2, 0.3)
+  gotg <- koine:::.re_group_marginal_t(yg, eg, rep(1L, 3), tau, sigma, nu, mix)
+  brug <- log(stats::integrate(function(b) {
+    vapply(b, function(z) prod(stats::dnorm(yg, eg + z, sigma)), numeric(1)) *
+      stats::dt(b / tau, nu) / tau
+  }, -Inf, Inf)$value)
+  expect_equal(gotg, brug, tolerance = 1e-5)
+})

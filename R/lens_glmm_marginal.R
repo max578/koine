@@ -36,26 +36,27 @@
 }
 
 # Log-posterior in the unconstrained space: the random-effects marginal
-# log-likelihood + weakly-informative priors (beta ~ N(0, 5); log-sigma ~ N(0,
-# 2) for the Gaussian residual SD; log-tau ~ N(0, 2) for the random-intercept
-# SD). The priors match the DRAM / NIMBLE lenses so cross-lens agreement is
-# method-independent rather than a prior artefact.
+# log-likelihood + weakly-informative priors (family-appropriate SDs from
+# `.re_prior()`: coefficients, the Gaussian residual log-sigma, and the
+# random-intercept log-tau). The priors match the NIMBLE lens so cross-lens
+# agreement is method-independent rather than a prior artefact.
 .glmm_marginal_logpost <- function(theta, design, redesign, pass, lay, gh,
-                                   beta_prior_sd = 5) {
+                                   prior) {
   beta <- theta[lay$coef_idx]
   eta_fixed <- as.numeric(design$X %*% beta)
   log_tau <- theta[lay$tau_idx]
   tau <- exp(log_tau)
   aux <- list()
-  lp_extra <- stats::dnorm(log_tau, 0, 2, log = TRUE)
+  lp_extra <- stats::dnorm(log_tau, 0, prior$log_tau_sd, log = TRUE)
   if (lay$has_sigma) {
     log_sigma <- theta[lay$sigma_idx]
     aux$sigma <- exp(log_sigma)
-    lp_extra <- lp_extra + stats::dnorm(log_sigma, 0, 2, log = TRUE)
+    lp_extra <- lp_extra + stats::dnorm(log_sigma, 0, prior$log_sigma_sd,
+                                        log = TRUE)
   }
   ll <- .re_group_marginal_loglik(pass$family, design$y, eta_fixed,
                                   redesign$group, tau, aux, gh)
-  prior_beta <- sum(stats::dnorm(beta, 0, beta_prior_sd, log = TRUE))
+  prior_beta <- sum(stats::dnorm(beta, 0, prior$beta_sd, log = TRUE))
   ll + prior_beta + lp_extra
 }
 
@@ -110,8 +111,9 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 4000L,
       design$X, design$y, family = .pass_glm_family(pass)))),
     error = function(e) rep.int(0, design$K))
   start[!is.finite(start)] <- 0
+  prior <- .re_prior(pass$family$name)
   logpost <- function(theta) {
-    .glmm_marginal_logpost(theta, design, redesign, pass, lay, gh)
+    .glmm_marginal_logpost(theta, design, redesign, pass, lay, gh, prior)
   }
   chains <- vector("list", n_chains)
   for (c in seq_len(n_chains)) {

@@ -47,12 +47,67 @@
   m + log(rowSums(exp(mat - m)))
 }
 
+# Weakly-informative prior SDs for the RE lenses, per family. The shared
+# N(0, 5) coefficient prior is fine for the Gaussian (identity) and binomial
+# (logit, bounded outcome) families, but for the Poisson (log link, unbounded
+# count) it makes the prior-predictive pathological (simulated counts ~1e22), so
+# SBC cannot validate the lens. A tighter family-appropriate prior gives a
+# sensible count prior-predictive. Both RE lenses share these SDs per family, so
+# their agreement remains method-independent (the priors match each other).
+.re_prior <- function(family_name) {
+  if (identical(family_name, "poisson")) {
+    list(beta_sd = 1, log_sigma_sd = 2, log_tau_sd = 0.5)
+  } else {
+    list(beta_sd = 5, log_sigma_sd = 2, log_tau_sd = 2)
+  }
+}
+
 # Whether the Gaussian-LMM analytic shortcut applies (identity-link Gaussian:
 # the random intercept enters the mean linearly, so the marginal is exactly
 # normal). Any other family/link routes through Gauss-Hermite quadrature.
 .re_is_gaussian_lmm <- function(family_spec) {
   identical(family_spec$name, "gaussian") &&
     identical(family_spec$link, "identity")
+}
+
+# Adaptive Gauss-Hermite quadrature of a random-effect integral, per "unit"
+# (a unit is a group of observations sharing one random effect b_u; for the
+# per-observation predictive each observation is its own unit). For each unit it
+# Newton-iterates to the mode b-hat_u of f_u(b) = sum_{i in u} loglik(y_i,
+# eta_i + b) + log N(b | 0, tau^2) using the family's canonical-link score /
+# information, scales standard Gauss-Hermite nodes by the local curvature, and
+# returns the per-unit log marginal log integral exp(f_u(b)) db. FIXED Gauss-
+# Hermite is non-convergent for sharply-peaked count integrands (the Poisson
+# group marginal); centring the nodes on the integrand makes the quadrature
+# accurate with few nodes. The quadrature still converges to the exact integral
+# --- it is a node placement, not a Laplace approximation to the posterior.
+.aghq_marginal <- function(family_spec, y, eta_fixed, unit, tau, aux,
+                           gh = NULL) {
+  if (is.null(gh)) {
+    gh <- .gh_rule(20L)
+  }
+  uf <- as.integer(factor(unit))
+  n_u <- max(uf)
+  inv_t2 <- 1 / tau^2
+  b <- numeric(n_u)
+  for (it in seq_len(10L)) {
+    eta <- eta_fixed + b[uf]
+    g1 <- as.numeric(rowsum(family_spec$dlp_deta(y, eta, aux), uf)) - b * inv_t2
+    g2 <- as.numeric(rowsum(family_spec$d2lp_deta2(y, eta, aux), uf)) - inv_t2
+    b <- b - g1 / g2
+  }
+  info <- -(as.numeric(rowsum(family_spec$d2lp_deta2(y, eta_fixed + b[uf], aux),
+                              uf)) - inv_t2)
+  sd_hat <- sqrt(1 / info)
+  log_w <- log(gh$weights)
+  cols <- vapply(seq_along(gh$nodes), function(k) {
+    bk <- b + sqrt(2) * sd_hat * gh$nodes[k]
+    fu <- as.numeric(rowsum(family_spec$loglik_pointwise(y, eta_fixed + bk[uf],
+                                                         aux), uf)) +
+      stats::dnorm(bk, 0, tau, log = TRUE)
+    fu + log_w[k] + gh$nodes[k]^2
+  }, numeric(n_u))
+  log(sqrt(2) * sd_hat) + .row_log_sum_exp(matrix(cols, nrow = n_u))
 }
 
 #' Per-observation integrated random-effect predictive (Stage-2)
@@ -78,16 +133,8 @@
     sd_marg <- sqrt(aux$sigma^2 + tau^2)
     return(stats::dnorm(y, mean = eta_fixed, sd = sd_marg, log = TRUE))
   }
-  if (is.null(gh)) {
-    gh <- .gh_rule()
-  }
-  shift <- sqrt(2) * tau
-  log_w <- log(gh$weights / sqrt(pi))
-  cols <- vapply(seq_along(gh$nodes), function(k) {
-    family_spec$loglik_pointwise(y, eta_fixed + shift * gh$nodes[k], aux) +
-      log_w[k]
-  }, numeric(length(y)))
-  .row_log_sum_exp(matrix(cols, nrow = length(y)))
+  # each observation is its own unit (a fresh random effect, marginalised)
+  .aghq_marginal(family_spec, y, eta_fixed, seq_along(y), tau, aux, gh)
 }
 
 #' Per-group random-effect marginal log-likelihood (Stage-2)
@@ -114,19 +161,9 @@
   if (.re_is_gaussian_lmm(family_spec)) {
     return(.re_group_marginal_gaussian(y, eta_fixed, group, tau, aux$sigma))
   }
-  if (is.null(gh)) {
-    gh <- .gh_rule()
-  }
-  shift <- sqrt(2) * tau
-  log_w <- log(gh$weights / sqrt(pi))
-  # For each node, the per-group sum of pointwise log-likelihoods (rowsum groups
-  # the per-observation contributions); columns are then the integrand summands.
-  n_groups <- length(unique(group))
-  group_sums <- vapply(seq_along(gh$nodes), function(k) {
-    pw <- family_spec$loglik_pointwise(y, eta_fixed + shift * gh$nodes[k], aux)
-    as.numeric(rowsum(pw, group)) + log_w[k]
-  }, numeric(n_groups))
-  sum(.row_log_sum_exp(matrix(group_sums, nrow = n_groups)))
+  # adaptive Gauss-Hermite per group (fixed GH is non-convergent for the
+  # sharply-peaked Poisson group integrand)
+  sum(.aghq_marginal(family_spec, y, eta_fixed, group, tau, aux, gh))
 }
 
 # Exact Gaussian-LMM per-group marginal: y_g ~ N(eta_fixed_g, sigma^2 I + tau^2
@@ -134,7 +171,10 @@
 # matrix is formed: for a group of size m with residual r = y_g - eta_fixed_g,
 #   log|Sigma| = m log(sigma^2) + log(1 + m tau^2 / sigma^2)
 #   r'Sigma^-1 r = (sum r^2 - tau^2/(sigma^2 + m tau^2) (sum r)^2) / sigma^2.
-.re_group_marginal_gaussian <- function(y, eta_fixed, group, tau, sigma) {
+# Per-group Gaussian-LMM log marginal (a vector over groups). The scalar version
+# below sums it; the t random-effect mixture (below) needs the per-group values
+# because each group's random effect mixes over its own scale.
+.re_group_gaussian_vec <- function(y, eta_fixed, group, tau, sigma) {
   s2 <- sigma^2
   t2 <- tau^2
   r <- y - eta_fixed
@@ -143,5 +183,74 @@
   sum_r2 <- as.numeric(rowsum(r^2, group))
   log_det <- m * log(s2) + log1p(m * t2 / s2)
   quad <- (sum_r2 - (t2 / (s2 + m * t2)) * sum_r^2) / s2
-  -0.5 * sum(m * log(2 * pi) + log_det + quad)
+  -0.5 * (m * log(2 * pi) + log_det + quad)
+}
+
+.re_group_marginal_gaussian <- function(y, eta_fixed, group, tau, sigma) {
+  sum(.re_group_gaussian_vec(y, eta_fixed, group, tau, sigma))
+}
+
+# Generalized Gauss-Laguerre rule (weight x^alpha exp(-x) on [0, Inf)) of order
+# `n`, by the Golub-Welsch eigendecomposition of the Jacobi matrix. Integrates
+# integral g(x) x^alpha exp(-x) dx ~= sum_k weights_k g(nodes_k), with
+# sum_k weights_k = gamma(alpha + 1).
+.gl_rule <- function(n = 32L, alpha = 0) {
+  n <- as.integer(n)
+  if (n == 1L) {
+    return(list(nodes = alpha + 1, weights = gamma(alpha + 1)))
+  }
+  k <- seq_len(n)
+  diagv <- 2 * (k - 1L) + alpha + 1
+  i <- seq_len(n - 1L)
+  off <- sqrt(i * (i + alpha))
+  jac <- matrix(0, n, n)
+  diag(jac) <- diagv
+  jac[cbind(i, i + 1L)] <- off
+  jac[cbind(i + 1L, i)] <- off
+  e <- eigen(jac, symmetric = TRUE)
+  ord <- order(e$values)
+  list(nodes = e$values[ord],
+       weights = (gamma(alpha + 1) * e$vectors[1L, ]^2)[ord])
+}
+
+# Quadrature for the Student-t scale mixture: a t_nu random effect is N(0,
+# tau^2 / lambda) with lambda ~ Gamma(nu/2, nu/2). Returns the lambda nodes and
+# normalised weights so that E_lambda[h(lambda)] ~= sum_k weight_k h(lambda_k).
+.t_mix_rule <- function(nu, n = 32L) {
+  a <- nu / 2
+  gl <- .gl_rule(n, alpha = a - 1)
+  list(lambda = gl$nodes / a, weight = gl$weights / gamma(a))
+}
+
+# Per-observation integrated predictive for a Gaussian LMM with t_nu random
+# intercepts: log E_lambda[ N(y_i | eta_fixed_i, sigma^2 + tau^2 / lambda) ],
+# the honest predictive for a new observation whose heavy-tailed random effect
+# is marginalised out.
+.re_integrated_loglik_t <- function(y, eta_fixed, tau, sigma, nu, mix = NULL) {
+  if (is.null(mix)) {
+    mix <- .t_mix_rule(nu)
+  }
+  cols <- vapply(seq_along(mix$lambda), function(k) {
+    sd_k <- sqrt(sigma^2 + tau^2 / mix$lambda[k])
+    stats::dnorm(y, eta_fixed, sd_k, log = TRUE) + log(mix$weight[k])
+  }, numeric(length(y)))
+  .row_log_sum_exp(matrix(cols, nrow = length(y)))
+}
+
+# Per-group marginal log-likelihood for a Gaussian LMM with t_nu random
+# intercepts. Each group's random effect mixes over its OWN scale, so the
+# integral is per group: sum_g log E_lambda[ N(y_g | eta_g, sigma^2 I + (tau^2 /
+# lambda) 11') ], with the inner Gaussian marginal evaluated analytically.
+.re_group_marginal_t <- function(y, eta_fixed, group, tau, sigma, nu,
+                                 mix = NULL) {
+  if (is.null(mix)) {
+    mix <- .t_mix_rule(nu)
+  }
+  ng <- length(unique(group))
+  per_group <- vapply(seq_along(mix$lambda), function(k) {
+    tau_k <- tau / sqrt(mix$lambda[k])
+    .re_group_gaussian_vec(y, eta_fixed, group, tau_k, sigma) +
+      log(mix$weight[k])
+  }, numeric(ng))
+  sum(.row_log_sum_exp(matrix(per_group, nrow = ng)))
 }

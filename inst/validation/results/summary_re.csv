@@ -1,4 +1,5 @@
 "lens","family","n_eff_sims","sbc_min_p","sbc_passed","concordance_median","concordance_pass","verdict"
 "glmm_marginal","gaussian",100,0.0298823579450798,TRUE,0.121325899763601,TRUE,"koine-implemented-validated"
-"glmm_marginal","binomial",100,0.143939690620056,TRUE,0.250703284739171,TRUE,"koine-implemented-validated"
-"glmm_marginal","poisson",100,7.47659247893403e-27,FALSE,0.254916613476342,TRUE,"experimental"
+"glmm_marginal","binomial",100,0.512022110887934,TRUE,0.343239290029692,TRUE,"koine-implemented-validated"
+"glmm_marginal","poisson",100,2.14938366047067e-08,FALSE,0.235625507880825,TRUE,"experimental"
+"glmm_robust_re","gaussian",100,0.202586900364436,TRUE,0.217260055516916,TRUE,"koine-implemented-validated"

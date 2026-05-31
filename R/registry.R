@@ -177,12 +177,13 @@ koine_stage1_registry <- function() {
                                          kernel = "glmm-marginal-quadrature"),
       role = "opinion", exactness = "approximate",
       maturity_tier = "koine-implemented-validated",
-      # Validated (SBC + concordance) for gaussian + binomial. The Poisson
-      # quadrature path is implemented and tested for correctness, but is NOT
-      # enrolled: under the default N(0, 5) coefficient prior the log-link
-      # Poisson prior-predictive is pathological (counts ~1e22+), so SBC cannot
-      # validate it (see the validation cairn). A family-appropriate count prior
-      # + re-validation is the recorded next step.
+      # Validated (SBC + concordance) for gaussian + binomial. The Poisson path
+      # is implemented and its marginal likelihood is now accurate (adaptive
+      # Gauss-Hermite; SBC tau + slope calibrate), but it is NOT enrolled: the
+      # random-walk sampler mixes the strongly-confounded count INTERCEPT too
+      # poorly (b0 ESS ~5-12%) for SBC to pass. A better-mixing sampler
+      # (non-centred reparameterisation / block update) is the recorded next
+      # step (see the validation cairn).
       family_support = function(fs) fs$name %in% c("gaussian", "binomial"),
       feature_support = .feat_re_intercept, emits_loglik = FALSE,
       fit_fn = fit_glmm_marginal, implemented = TRUE,
@@ -201,6 +202,18 @@ koine_stage1_registry <- function() {
       family_support = function(fs) fs$name %in% c("gaussian", "binomial"),
       feature_support = .feat_re_intercept, emits_loglik = FALSE,
       fit_fn = fit_nimble_glmm, implemented = TRUE
+    ),
+    lens_spec(
+      id = "glmm_robust_re",
+      label = "Heavy-tailed random-effect LMM (Student-t random intercepts)",
+      tier = 1L, independence_key = list(family = "random_walk",
+                                         kernel = "glmm-robust-re"),
+      role = "opinion", exactness = "approximate",
+      maturity_tier = "koine-implemented-validated",
+      family_support = function(fs) fs$name == "gaussian",
+      feature_support = .feat_re_intercept, emits_loglik = TRUE,
+      fit_fn = fit_glmm_robust_re, implemented = TRUE, structure_variant = TRUE,
+      validation_ref = "r-package/2026-06-01-koine-re-stage2b-aghq-robust-re"
     ),
     lens_spec(
       id = "bridge_evidence",

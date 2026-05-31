@@ -135,6 +135,13 @@ fit_re <- fit_glmm_marginal(pass_re, n_iter = 2000L, n_burn = 1000L,
 posterior::summarise_draws(fit_re$draws, "mean")    # recovers beta, sigma, tau
 ```
 
+A third lens, `fit_glmm_robust_re()`, gives the random intercepts heavy
+(Student-t) tails. Where the two Gaussian-RE lenses corroborate (their weights
+collapse), this structure variant earns real stacking weight when group effects
+are outlying --- so koine's mixed-model opinion, like its population battery,
+becomes sensitive to model structure rather than a weighted echo of one
+assumption.
+
 Richer structure is refused rather than fitted as the wrong model: a random
 slope, or more than one grouping factor, makes koine abstain
 `feature_unsupported`.

@@ -189,6 +189,52 @@ run_re_validation_study <- function(out_dir = NULL, n_sims = 120L,
         min(sbc$uniformity$p_value), sbc$passed, conc$disc, conc$pass, verdict))
     }
   }
+  # Heavy-tailed random-effect lens (glmm_robust_re): SBC against its own t-RE
+  # generative model + concordance against a NIMBLE t-RE reference (sampled b).
+  if (verbose) message("== glmm_robust_re / gaussian (t-RE) ==")
+  setup_r <- koine_lens_validation_setup("glmm_robust_re", n_groups = 15L,
+                                         n_per_group = 6L, fit_control = ctrl)
+  sbc_r <- sbc_check(setup_r$generate, setup_r$fit_fn, setup_r$param_names,
+                     n_sims = n_sims, n_keep = n_keep, n_bins = 8L,
+                     alpha = alpha, seed = 20260531L)
+  conc_r <- list(available = FALSE, disc = NA_real_, pass = NA)
+  if (have_nimble) {
+    fit_t <- utils::getFromNamespace(".fit_nimble_glmm_t", "koine")
+    dr <- vapply(seq_len(n_conc), function(i) {
+      g <- setup_r$generate(700000L + i)
+      fr <- setup_r$fit_fn(g$pass)
+      fn <- fit_t(g$pass, nu = 4, n_iter = ctrl$n_iter, n_burn = ctrl$n_burn,
+                  n_chains = ctrl$n_chains)
+      if (is_abstention(fr) || is_abstention(fn)) return(NA_real_)
+      a <- posterior::summarise_draws(fr$draws, mean = mean)
+      bb <- posterior::summarise_draws(fn$draws, mean = mean, sd = stats::sd)
+      max(abs(a$mean - bb$mean) / pmax(bb$sd, 1e-6))
+    }, numeric(1))
+    dr <- dr[is.finite(dr)]
+    conc_r <- list(available = TRUE, disc = stats::median(dr),
+                   pass = length(dr) > 0L && stats::median(dr) < conc_tol)
+  }
+  verdict_r <- if (sbc_r$passed &&
+                     (!isTRUE(conc_r$available) || isTRUE(conc_r$pass))) {
+    "koine-implemented-validated"
+  } else {
+    "experimental"
+  }
+  saveRDS(list(lens = "glmm_robust_re", family = "gaussian", sbc = sbc_r,
+               concordance = conc_r, verdict = verdict_r),
+          file.path(res_dir, "sbc_glmm_robust_re_gaussian.rds"))
+  rows[[length(rows) + 1L]] <- data.frame(
+    lens = "glmm_robust_re", family = "gaussian", n_eff_sims = sbc_r$n_eff_sims,
+    sbc_min_p = min(sbc_r$uniformity$p_value), sbc_passed = sbc_r$passed,
+    concordance_median = conc_r$disc, concordance_pass = conc_r$pass,
+    verdict = verdict_r, stringsAsFactors = FALSE)
+  if (verbose) {
+    message(sprintf(
+      "   SBC min p = %.3f (pass=%s); concordance median = %.3f (pass=%s) -> %s",
+      min(sbc_r$uniformity$p_value), sbc_r$passed, conc_r$disc, conc_r$pass,
+      verdict_r))
+  }
+
   summ <- do.call(rbind, rows)
   saveRDS(summ, file.path(res_dir, "summary_re.rds"))
   utils::write.csv(summ, file.path(res_dir, "summary_re.csv"), row.names = FALSE)

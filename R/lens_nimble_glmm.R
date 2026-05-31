@@ -24,13 +24,16 @@
     (family_name == "binomial" && link == "logit") ||
     (family_name == "poisson" && link == "log")
   if (!ok) return(NULL)
+  # Prior SDs (beta_sd, log_sigma_sd, log_tau_sd) are supplied as model
+  # constants by the caller (`.re_prior()`), so the family-appropriate prior is
+  # applied without duplicating the model code per prior.
   switch(
     family_name,
     gaussian = nimble::nimbleCode({
-      for (k in 1:K) beta[k] ~ dnorm(0, sd = 5)
-      log_sigma ~ dnorm(0, sd = 2)
+      for (k in 1:K) beta[k] ~ dnorm(0, sd = beta_sd)
+      log_sigma ~ dnorm(0, sd = log_sigma_sd)
       sigma <- exp(log_sigma)
-      log_tau ~ dnorm(0, sd = 2)
+      log_tau ~ dnorm(0, sd = log_tau_sd)
       tau <- exp(log_tau)
       for (j in 1:G) b[j] ~ dnorm(0, sd = tau)
       for (i in 1:N) {
@@ -39,8 +42,8 @@
       }
     }),
     binomial = nimble::nimbleCode({
-      for (k in 1:K) beta[k] ~ dnorm(0, sd = 5)
-      log_tau ~ dnorm(0, sd = 2)
+      for (k in 1:K) beta[k] ~ dnorm(0, sd = beta_sd)
+      log_tau ~ dnorm(0, sd = log_tau_sd)
       tau <- exp(log_tau)
       for (j in 1:G) b[j] ~ dnorm(0, sd = tau)
       for (i in 1:N) {
@@ -49,8 +52,8 @@
       }
     }),
     poisson = nimble::nimbleCode({
-      for (k in 1:K) beta[k] ~ dnorm(0, sd = 5)
-      log_tau ~ dnorm(0, sd = 2)
+      for (k in 1:K) beta[k] ~ dnorm(0, sd = beta_sd)
+      log_tau ~ dnorm(0, sd = log_tau_sd)
       tau <- exp(log_tau)
       for (j in 1:G) b[j] ~ dnorm(0, sd = tau)
       for (i in 1:N) {
@@ -119,8 +122,11 @@ fit_nimble_glmm <- function(pass, lens_spec = NULL, n_iter = 4000L,
   monitors <- c("beta", "tau")
   if (has_sigma) monitors <- c(monitors, "sigma")
 
+  prior <- .re_prior(pass$family$name)
   constants <- list(N = design$N, K = design$K, X = design$X,
-                    G = redesign$n_groups, group = redesign$group)
+                    G = redesign$n_groups, group = redesign$group,
+                    beta_sd = prior$beta_sd, log_tau_sd = prior$log_tau_sd)
+  if (has_sigma) constants$log_sigma_sd <- prior$log_sigma_sd
   data_list <- list(y = design$y)
   warm <- tryCatch(
     suppressWarnings(stats::coef(stats::glm.fit(
@@ -158,6 +164,78 @@ fit_nimble_glmm <- function(pass, lens_spec = NULL, n_iter = 4000L,
     lib_versions = list(nimble = as.character(utils::packageVersion("nimble"))),
     trace = list(fit = "nimble GLMM MCMC completed"))
   fb_fit(draws = draws, provenance = prov, exactness = lens_spec$exactness,
+         sample_stats = NULL, status = "contributed")
+}
+
+# Validation-only NIMBLE reference for the heavy-tailed random-effect lens: a
+# Gaussian LMM with Student-t random intercepts written as the SAME Normal
+# scale-mixture the marginal lens uses (b_j ~ N(0, tau^2 / lam_j), lam_j ~
+# Gamma(nu/2, nu/2)), so the two are concordance-comparable on the identical
+# t-RE definition. Not a registry lens --- it is the independent reference the
+# koine-authored glmm_robust_re lens is validated against (SS11 concordance).
+.fit_nimble_glmm_t <- function(pass, nu = 4, n_iter = 4000L, n_burn = 2000L,
+                               n_chains = 3L) {
+  if (!requireNamespace("nimble", quietly = TRUE)) {
+    return(abstention("resource_exceeded", scope = "lens",
+                      detail = "the nimble package is not installed."))
+  }
+  if (!"package:nimble" %in% search()) {
+    suppressMessages(attachNamespace("nimble"))
+  }
+  design <- .pass_design(pass)
+  redesign <- .pass_re_design(pass)
+  dseed <- .derived_seed(pass$seed, "nimble_glmm_t")
+  prior <- .re_prior("gaussian")
+  code <- nimble::nimbleCode({
+    for (k in 1:K) beta[k] ~ dnorm(0, sd = beta_sd)
+    log_sigma ~ dnorm(0, sd = log_sigma_sd)
+    sigma <- exp(log_sigma)
+    log_tau ~ dnorm(0, sd = log_tau_sd)
+    tau <- exp(log_tau)
+    for (j in 1:G) {
+      lam[j] ~ dgamma(nu_half, nu_half)
+      b[j] ~ dnorm(0, sd = tau / sqrt(lam[j]))
+    }
+    for (i in 1:N) {
+      mu[i] <- inprod(X[i, 1:K], beta[1:K]) + b[group[i]]
+      y[i] ~ dnorm(mu[i], sd = sigma)
+    }
+  })
+  constants <- list(N = design$N, K = design$K, X = design$X,
+                    G = redesign$n_groups, group = redesign$group,
+                    beta_sd = prior$beta_sd, log_sigma_sd = prior$log_sigma_sd,
+                    log_tau_sd = prior$log_tau_sd, nu_half = nu / 2)
+  warm <- tryCatch(stats::coef(stats::lm.fit(design$X, design$y)),
+                   error = function(e) rep.int(0, design$K))
+  warm[!is.finite(warm)] <- 0
+  inits <- list(beta = as.numeric(warm), log_sigma = 0, log_tau = 0,
+                lam = rep.int(1, redesign$n_groups),
+                b = rep.int(0, redesign$n_groups))
+  samples <- NULL
+  .nimble_quiet({
+    model <- nimble::nimbleModel(code, constants = constants,
+                                 data = list(y = design$y), inits = inits,
+                                 calculate = FALSE)
+    cmodel <- nimble::compileNimble(model)
+    conf <- nimble::configureMCMC(model, monitors = c("beta", "sigma", "tau"),
+                                  print = FALSE)
+    cmcmc <- nimble::compileNimble(nimble::buildMCMC(conf), project = model)
+    samples <- nimble::runMCMC(cmcmc, niter = n_iter, nburnin = n_burn,
+                               nchains = n_chains,
+                               setSeed = dseed + seq_len(n_chains),
+                               progressBar = FALSE, samplesAsCodaMCMC = FALSE)
+  })
+  if (!is.list(samples)) samples <- list(samples)
+  prov <- provenance_record(
+    method = "nimble_glmm_t", method_version = "0.0.0.9000",
+    impl_language = "R", seed = pass$seed, derived_seed = dseed,
+    ir_hash = pass$ir_hash, maturity_tier = "reference-validated",
+    independence_key = list(family = "gibbs", kernel = "nimble-mwg-glmm-t"),
+    role = "opinion", exactness = "exact",
+    lib_versions = list(nimble = as.character(utils::packageVersion("nimble"))),
+    trace = list(fit = "nimble t-RE reference completed"))
+  draws <- .nimble_glmm_to_draws(samples, design, TRUE)
+  fb_fit(draws = draws, provenance = prov, exactness = "exact",
          sample_stats = NULL, status = "contributed")
 }
 

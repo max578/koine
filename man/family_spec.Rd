@@ -11,7 +11,9 @@ family_spec(
   loglik_pointwise,
   rng,
   support_check,
-  aux_params = character(0)
+  aux_params = character(0),
+  dlp_deta = NULL,
+  d2lp_deta2 = NULL
 )
 }
 \arguments{
@@ -33,6 +35,15 @@ family support.}
 
 \item{aux_params}{Character vector naming the auxiliary parameters (e.g.
 \code{"sigma"} for Gaussian, none for Binomial).}
+
+\item{dlp_deta}{Optional function \verb{(y, eta, aux)} returning the first
+derivative of the pointwise log-likelihood with respect to the linear
+predictor (the canonical-link score), used by adaptive Gauss-Hermite
+quadrature to locate the random-effect integrand's mode.}
+
+\item{d2lp_deta2}{Optional function \verb{(y, eta, aux)} returning the second
+derivative (the negative observed information), used for the quadrature's
+curvature scaling.}
 }
 \value{
 An object of class \code{koine_family_spec}.
