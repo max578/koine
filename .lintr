@@ -1,0 +1,9 @@
+linters: linters_with_defaults(
+    line_length_linter(80L),
+    object_name_linter = NULL,
+    commented_code_linter = NULL,
+    indentation_linter = NULL,
+    brace_linter = NULL
+  )
+encoding: "UTF-8"
+exclusions: list("tests/testthat", "inst/validation/sbc_study.R")

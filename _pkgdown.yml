@@ -1,0 +1,57 @@
+url: https://github.com/max578/koine
+
+template:
+  bootstrap: 5
+
+reference:
+- title: Request and contract
+  desc: The engine-neutral request, the evaluable family adapter, and the uniform lens-output contract.
+  contents:
+  - koine_pass
+  - as_family_spec
+  - family_spec
+  - fb_fit
+  - validate_fb_fit
+  - fb_fit_diagnostics
+  - provenance_record
+  - validate_provenance
+- title: Battery and enrolment registry
+  contents:
+  - lens_spec
+  - koine_stage1_registry
+  - resolve_battery
+- title: Opinion lenses
+  desc: Inference-family witnesses and model-structure variants.
+  contents:
+  - fit_dram
+  - fit_nimble
+  - fit_pg_gibbs
+  - fit_dream
+  - fit_robust_t
+  - fit_ridge
+  - fit_lasso
+  - fit_horseshoe
+- title: Synthesis and gate
+  contents:
+  - synthesise
+  - assemble_loglik
+  - gate_psis
+  - stack_opinion
+- title: Diagnostic layer
+  contents:
+  - weight_concentration
+  - linear_pool_envelope
+  - evidence_axis
+  - independence_report
+- title: Validation and maturity gate
+  contents:
+  - sbc_check
+  - reference_posterior_check
+  - gate_corroboration
+  - lens_effective_maturity
+  - koine_lens_validation_setup
+- title: Abstention and interchange
+  contents:
+  - abstention
+  - is_abstention
+  - read_idata_nc

@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use koine, please cite it as below."
+type: software
+title: "koine: Synthesised Fourth Opinion for Bayesian Triangulation"
+version: 0.0.0.9000
+abstract: >-
+  Synthesises one coherent, independent predictive opinion for a Bayesian model
+  from a curated battery of known and underutilised inference methods, or
+  abstains when no diversity gain exists. It stacks over model-structure and
+  method diversity in predictive space (leave-one-out stacking, PSIS-gated) on an
+  axis orthogonal to the engine axis, to serve as a fourth, synthesised witness
+  alongside an independent panel of inference engines.
+authors:
+  - family-names: Moldovan
+    given-names: Max
+    orcid: "https://orcid.org/0000-0001-9680-8474"
+repository-code: "https://github.com/max578/koine"
+url: "https://github.com/max578/koine"
+keywords:
+  - Bayesian inference
+  - model stacking
+  - triangulation
+  - simulation-based calibration
+  - R
+# No licence is declared yet (pending the required consultation); a licence
+# field will be added once the licence is chosen.

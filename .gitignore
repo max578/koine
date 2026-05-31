@@ -1,0 +1,26 @@
+# R session / project
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# build + check artefacts
+*.tar.gz
+*.Rcheck/
+src/*.o
+src/*.so
+src/*.dll
+..Rcheck/
+CRAN-SUBMISSION
+
+# pkgdown output
+/docs/
+
+# AI-assistant scratch directories (AAGI canon)
+.claude/
+.positai/
+.cursor/
+
+# OS
+.DS_Store

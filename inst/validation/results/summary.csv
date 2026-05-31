@@ -1,0 +1,4 @@
+"lens","n_eff_sims","sbc_min_p","sbc_passed","ref_median_disc","ref_passed","verdict"
+"dram",160,0.0771339069933067,TRUE,0.0667047567943164,TRUE,"koine-implemented-validated"
+"pg_gibbs",160,0.0771339069933067,TRUE,0.059897919028993,TRUE,"koine-implemented-validated"
+"robust_t",160,0.0797640591770084,TRUE,0.0912160904582233,TRUE,"koine-implemented-validated"

@@ -1,0 +1,7 @@
+# Air formatter configuration (Posit). The koine sources are hand-crafted to
+# the two-space / 80-character house style; these settings make Air agree rather
+# than reformat. See https://posit-dev.github.io/air/.
+[format]
+line-width = 80
+indent-width = 2
+indent-style = "space"

@@ -1,0 +1,125 @@
+---
+title: "koine: the synthesised fourth opinion"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{koine: the synthesised fourth opinion}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+set.seed(1)
+```
+
+```{r setup}
+library(koine)
+```
+
+## What koine does
+
+koine synthesises *one* coherent, independent predictive opinion for a Bayesian
+model from a curated battery of inference lenses --- or it abstains when no
+diversity gain exists. It stacks over model-structure and method diversity in
+predictive space, on an axis orthogonal to any panel of inference engines it
+sits beside. This vignette walks the increment-1 spine: the request, the
+battery, one lens, and the synthesis-or-abstain decision.
+
+## The request: a `pass`
+
+A `pass` is an engine-neutral, declarative request. It carries the formula, the
+data, an evaluable family, the canonical observation axis, and a content hash.
+
+```{r pass}
+set.seed(42)
+n <- 40L
+x <- rnorm(n)
+d <- data.frame(y = 1.5 + 0.8 * x + rnorm(n, sd = 0.7), x = x)
+
+pass <- koine_pass(y ~ x, data = d, family = gaussian())
+pass
+```
+
+The family is wrapped into an *evaluable* `family_spec`: koine computes the
+pointwise log-likelihood itself, because the upstream family object exposes a
+mean function but no log-likelihood.
+
+```{r family}
+fs <- as_family_spec(gaussian())
+fs$loglik_pointwise(y = c(0, 1), eta = c(0, 1), aux = list(sigma = 1))
+```
+
+## The battery
+
+`resolve_battery()` enrols only the lenses whose family, features, and tier fit
+the request --- and records *why* each excluded lens was left out. Honest,
+logged absence is the rule; silent omission is never allowed.
+
+```{r resolve}
+res <- resolve_battery(pass)
+vapply(res$enrolled, function(L) L$id, character(1))
+res$excluded
+```
+
+For this Gaussian model several lenses resolve --- DRAM, NIMBLE-Gibbs and DREAM
+(different inference families on the same posterior), plus the model-structure
+variants: robust-t and a shrinkage spectrum (ridge, lasso, horseshoe). The
+Polya-Gamma Gibbs lens is excluded on family grounds (it serves binomial
+logistic models, not Gaussian), and that exclusion carries its reason.
+
+## One lens: delayed-rejection adaptive Metropolis
+
+```{r dram}
+fit <- fit_dram(pass, n_iter = 1500L, n_burn = 750L, n_chains = 2L)
+fit
+posterior::summarise_draws(fit$draws, "mean", "sd")
+```
+
+The estimated intercept and slope recover the data-generating `1.5` and `0.8`.
+
+## Synthesis: realising diversity
+
+koine's value as a fourth witness comes from *diversity*. Lenses that fit the
+same model only corroborate one another --- a useful consistency check, but the
+stacking weights then collapse onto a single component. Genuine diversity needs
+a different model *structure*. The robust-t lens supplies one: a Student-t
+likelihood whose heavy tails give a materially different predictive when the
+data depart from Gaussianity.
+
+```{r synthesise}
+set.seed(7)
+xd <- rnorm(150)
+yd <- 1 + 0.8 * xd + rt(150, df = 5) * 0.6        # moderately heavy-tailed
+pass_ht <- koine_pass(yd ~ xd, data.frame(yd = yd, xd = xd), gaussian())
+
+reg <- koine_stage1_registry()
+bid <- function(id) which(vapply(reg, function(z) z$id, "") == id)
+reg2 <- list(reg[[bid("dram")]], reg[[bid("robust_t")]])
+reg2[[1]]$fit_fn <- function(p, ls) fit_dram(p, ls, 2000L, 1000L, 2L)
+reg2[[2]]$fit_fn <- function(p, ls) fit_robust_t(p, ls, nu = 4, n_iter = 2000L,
+                                                 n_burn = 1000L, n_chains = 2L)
+
+res <- synthesise(pass_ht, registry = reg2)
+res
+res$independence[, c("lens_id", "family", "kernel")]
+```
+
+The weights do not collapse: the Gaussian (DRAM) and Student-t lenses each carry
+real weight, and the diversity diagnostic reports more than one effective
+component. That spread is the orthogonal-diversity signal --- the fourth opinion
+is sensitive to model structure, not a weighted echo of a single posterior.
+
+## When koine abstains
+
+Abstention is a first-class outcome, not an error. If fewer than two
+independent opinion lenses resolve --- for instance with a single-lens battery
+--- koine declines to guess and says why.
+
+```{r abstain}
+out <- synthesise(pass, registry = list(koine_stage1_registry()[[1]]))
+is_abstention(out)
+out
+```
+
+Under-claiming beats a wrong fourth opinion: that is the design intent.
+```
