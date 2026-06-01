@@ -70,7 +70,16 @@
     # -- stage 1 proposal --
     y1 <- .rmvn(x, sig)
     lpy1 <- logpost(y1)
-    a1 <- exp(min(0, lpy1 - lpx))
+    # NaN-safe acceptance: reject an impossible proposal; accept unconditionally
+    # when the current point is impossible (escape a bad warm start) --- so
+    # `lpy1 - lpx` is never the indeterminate -Inf minus -Inf.
+    a1 <- if (!is.finite(lpy1)) {
+      0
+    } else if (!is.finite(lpx)) {
+      1
+    } else {
+      exp(min(0, lpy1 - lpx))
+    }
     accepted <- FALSE
     if (stats::runif(1) < a1) {
       x <- y1
@@ -88,7 +97,14 @@
       log_q_den <- .dmvn_log(y1, x, sig)
       num <- lpy2 + log_q_num + log1p(-a1_y2)
       den <- lpx + log_q_den + log1p(-a1)
-      a2 <- if (a1 >= 1 || a1_y2 >= 1) 0 else exp(min(0, num - den))
+      # reject (a2 = 0) if either proposal is impossible: a1_y2 is NaN when both
+      # y1 and y2 fall in a -Inf region (-Inf - -Inf), which must not propagate
+      # into the acceptance test.
+      a2 <- if (a1 >= 1 || !is.finite(a1_y2) || a1_y2 >= 1) {
+        0
+      } else {
+        exp(min(0, num - den))
+      }
       if (is.finite(a2) && stats::runif(1) < a2) {
         x <- y2
         lpx <- lpy2

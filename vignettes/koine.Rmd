@@ -115,11 +115,11 @@ koine also handles a single random intercept, `(1 | g)`. The opinion is built on
 an axis orthogonal to the sealed engines: NIMBLE-Gibbs (`fit_nimble_glmm()`)
 *samples* the random effects, while the marginal lens (`fit_glmm_marginal()`,
 shown here because it needs no extra toolchain) *integrates* them out --- exactly
-for the Gaussian LMM, by Gauss-Hermite quadrature for the binomial GLMM. Both
-report `(beta, sigma, tau)` and are stacked on the same per-observation
+for the Gaussian LMM, by adaptive Gauss-Hermite quadrature for the binomial GLMM.
+Both report `(beta, sigma, tau)` and are stacked on the same per-observation
 *integrated* predictive (the random effect marginalised under each draw's
 variance components), which keeps the leave-one-out gate reliable. (A Poisson
-path is implemented but held experimental pending a family-appropriate prior.)
+GLMM path exists but is held experimental pending a better-mixing sampler.)
 
 ```{r re}
 set.seed(20)

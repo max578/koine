@@ -44,6 +44,26 @@ test_that("glmm_marginal on a GLMM is reported as an approximate (quadrature) fi
   expect_equal(bx, 0.8, tolerance = 0.3)
 })
 
+test_that("glmm_marginal fits a Poisson GLMM with a well-mixed intercept", {
+  set.seed(5)
+  g <- rep(1:20, each = 8)
+  x <- rnorm(160)
+  b <- rnorm(20, 0, 0.7)
+  y <- rpois(160, exp(0.3 + 0.4 * x + b[g]))
+  d <- data.frame(y = y, x = x, g = factor(g))
+  pass <- koine_pass(y ~ x + (1 | g), d, poisson(), seed = 7L)
+  fit <- fit_glmm_marginal(pass, n_iter = 3000L, n_burn = 1500L, n_chains = 3L)
+  expect_identical(fit$status, "contributed")
+  s <- posterior::summarise_draws(fit$draws, "mean", rhat = posterior::rhat,
+                                  ess_bulk = posterior::ess_bulk)
+  m <- stats::setNames(s$mean, s$variable)
+  expect_equal(unname(m["b_x"]), 0.4, tolerance = 0.25)
+  expect_true(all(s$rhat < 1.1))
+  # the log-link intercept reparameterisation keeps the count intercept mixing
+  # (it otherwise stalls at ~5-12% efficiency)
+  expect_gt(s$ess_bulk[s$variable == "b_(Intercept)"], 300)
+})
+
 test_that("glmm_marginal abstains on a population pass (lens scope)", {
   d <- data.frame(y = rnorm(30), x = rnorm(30))
   fit <- fit_glmm_marginal(koine_pass(y ~ x, d, gaussian()))

@@ -339,7 +339,7 @@ koine_lens_validation_setup <- function(lens_id, n_obs = 40L, n_pred = 1L,
     fam <- if (lens_id == "glmm_robust_re") "gaussian" else match.arg(family)
     return(.re_validation_setup(lens_id, fam, n_pred, bcols, beta_sd,
                                 log_sigma_sd, n_groups, n_per_group,
-                                fit_control))
+                                fit_control, nu))
   }
 
   if (lens_id == "pg_gibbs") {
@@ -451,7 +451,7 @@ koine_lens_validation_setup <- function(lens_id, n_obs = 40L, n_pred = 1L,
 
 .re_validation_setup <- function(lens_id, family, n_pred, bcols, beta_sd,
                                  log_sigma_sd, n_groups, n_per_group,
-                                 fit_control) {
+                                 fit_control, nu = 4) {
   has_sigma <- family == "gaussian"
   # SBC must simulate from the lens's ACTUAL (family-appropriate) prior, so the
   # {prior, model, sampler} triple is the one being validated.
@@ -467,7 +467,6 @@ koine_lens_validation_setup <- function(lens_id, n_obs = 40L, n_pred = 1L,
   # must use the t-RE marginal --- otherwise the {prior, model, sampler} triple
   # being validated is not the lens's own.
   is_robust <- lens_id == "glmm_robust_re"
-  nu <- 4
   fit_lens <- switch(lens_id,
                      glmm_marginal = fit_glmm_marginal,
                      nimble_glmm = fit_nimble_glmm,
@@ -500,7 +499,8 @@ koine_lens_validation_setup <- function(lens_id, n_obs = 40L, n_pred = 1L,
   }
 
   fit_fn <- function(pass) {
-    do.call(fit_lens, c(list(pass = pass), fit_control))
+    args <- c(list(pass = pass), if (is_robust) list(nu = nu), fit_control)
+    do.call(fit_lens, args)
   }
 
   reference <- function(g, n_pts = 15L) {

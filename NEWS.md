@@ -19,15 +19,19 @@
   out (exact for the Gaussian LMM, Gauss-Hermite quadrature for a GLMM) --- and
   `fit_nimble_glmm()` --- NIMBLE Gibbs that samples the random effects. The two
   carry identical priors, so their agreement is method-independent consensus.
-  Enrolled (validated) for the Gaussian LMM and the binomial GLMM.
-* A third, heavy-tailed random-effect lens, `fit_glmm_robust_re()`: a Gaussian
-  LMM whose random intercepts are Student-t (`b_g ~ t_nu`), integrated out via
-  the Normal scale-mixture (Gauss-Laguerre over the mixing scale). It is the
-  within-battery analogue of the population robust-t lens --- where the two
-  Gaussian-RE lenses corroborate (weights collapse), the t-RE lens earns real
-  stacking weight when group effects are heavy-tailed, so koine's RE opinion
-  becomes sensitive to random-effect structure rather than a weighted echo of
-  one assumption.
+  Enrolled (validated) for the Gaussian LMM and the binomial GLMM (the Poisson
+  GLMM is implemented but held experimental --- see below).
+* A heavy-tailed random-effect lens, `fit_glmm_robust_re()`: a Gaussian LMM
+  whose random intercepts are Student-t (`b_g ~ t_nu`), integrated out via the
+  Normal scale-mixture (Gauss-Laguerre over the mixing scale). It is enrolled as
+  a **spectrum over the degrees of freedom** (a grid `nu in {3, 8}`, analogous
+  to the shrinkage spectrum), so stacking can favour the random-effect
+  tail-weight the data support. It is the within-battery analogue of the
+  population robust-t lens --- where the Gaussian-RE lenses corroborate (weights
+  collapse), the t-RE lenses earn real stacking weight when group effects are
+  heavy-tailed (`n_eff ~ 1.75` on `t_3` effects), so koine's RE opinion becomes
+  sensitive to random-effect structure rather than a weighted echo of one
+  assumption.
 * Adaptive Gauss-Hermite quadrature for the non-Gaussian random-effect marginal
   (per-group Newton mode-finding + curvature-scaled nodes, closed-form
   canonical-link scores added to `family_spec`). Fixed Gauss-Hermite is
@@ -39,14 +43,19 @@
   Gaussian and binomial families, whose `N(0, 5)` prior is fine.
 * `assemble_loglik()` and `evidence_axis()` gained random-effects branches built
   on a single shared marginalisation core.
-* The validation harness covers all three mixed-model lenses; they are validated
-  by SBC plus cross-implementation concordance against NIMBLE (recorded study in
-  `inst/validation/`). The Poisson GLMM remains held experimental and is not
-  enrolled: adaptive Gauss-Hermite fixed its marginal-likelihood quadrature (its
-  variance
-  component and slope now calibrate), but the random-walk sampler mixes the
-  strongly-confounded count intercept too poorly for SBC to pass --- a
-  better-mixing sampler is the recorded next step.
+* A NaN-safe sampler guard: `.dram_one_chain()` and the marginal log-posteriors
+  guard both Metropolis acceptance ratios against non-finite log-posteriors, so
+  an extreme proposal is rejected (and a chain started from an impossible point
+  escapes) rather than halting on a `NaN` acceptance test. Finite cases are
+  unchanged.
+* The validation harness covers every mixed-model lens; the enrolled ones are
+  validated by SBC plus cross-implementation concordance against NIMBLE
+  (recorded study in `inst/validation/`). The Poisson GLMM remains held
+  experimental and is not enrolled: adaptive Gauss-Hermite fixed its
+  marginal-likelihood quadrature and a log-link intercept reparameterisation
+  calibrated its variance component and slope, but the count-intercept marginal
+  still fails SBC (a residual bias the random-walk kernel does not clear) --- an
+  HMC-grade sampler is the recorded next step.
 
 ## Stage-1 --- the synthesis spine
 

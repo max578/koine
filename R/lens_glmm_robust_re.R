@@ -75,7 +75,7 @@ fit_glmm_robust_re <- function(pass, lens_spec = NULL, nu = 4,
                                n_iter = 4000L, n_burn = 2000L, n_chains = 4L,
                                n_nodes = 32L) {
   if (is.null(lens_spec)) {
-    lens_spec <- .registry_lens("glmm_robust_re")
+    lens_spec <- .robust_re_lens_spec(nu)
   }
   if (!(pass$family$name == "gaussian" && pass$family$link == "identity")) {
     return(abstention(
@@ -99,7 +99,8 @@ fit_glmm_robust_re <- function(pass, lens_spec = NULL, nu = 4,
                     error = function(e) rep.int(0, design$K))
   start[!is.finite(start)] <- 0
   logpost <- function(theta) {
-    .glmm_robust_re_logpost(theta, design, redesign, prior, nu, mix, lay)
+    v <- .glmm_robust_re_logpost(theta, design, redesign, prior, nu, mix, lay)
+    if (is.finite(v)) v else -Inf      # extreme theta (overflow) -> reject
   }
   chains <- vector("list", n_chains)
   for (c in seq_len(n_chains)) {

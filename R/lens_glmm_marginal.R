@@ -40,12 +40,23 @@
 # `.re_prior()`: coefficients, the Gaussian residual log-sigma, and the
 # random-intercept log-tau). The priors match the NIMBLE lens so cross-lens
 # agreement is method-independent rather than a prior artefact.
+#
+# `rep_pos` (> 0 for the log-link Poisson intercept) selects the LEVEL
+# reparameterisation: the sampled intercept is alpha0 = beta0 + tau^2 / 2 (the
+# marginal-mean-level intercept the data actually identifies), decorrelated from
+# tau; the coefficient is recovered as beta0 = alpha0 - tau^2 / 2 before the
+# likelihood / prior are evaluated. The transform is a unit-Jacobian shear (so
+# the target is unchanged), but it removes the beta0-tau ridge the random walk
+# otherwise mixes through far too slowly (SBC-failing intercept ESS).
 .glmm_marginal_logpost <- function(theta, design, redesign, pass, lay, gh,
-                                   prior) {
+                                   prior, rep_pos = 0L) {
   beta <- theta[lay$coef_idx]
-  eta_fixed <- as.numeric(design$X %*% beta)
   log_tau <- theta[lay$tau_idx]
   tau <- exp(log_tau)
+  if (rep_pos > 0L) {
+    beta[rep_pos] <- beta[rep_pos] - tau^2 / 2
+  }
+  eta_fixed <- as.numeric(design$X %*% beta)
   aux <- list()
   lp_extra <- stats::dnorm(log_tau, 0, prior$log_tau_sd, log = TRUE)
   if (lay$has_sigma) {
@@ -112,8 +123,18 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 4000L,
     error = function(e) rep.int(0, design$K))
   start[!is.finite(start)] <- 0
   prior <- .re_prior(pass$family$name)
+  # log-link Poisson: sample the decorrelated marginal-mean-level intercept (the
+  # population GLM intercept already estimates it, so the warm start is apt).
+  rep_pos <- if (identical(pass$family$name, "poisson") &&
+                   identical(pass$family$link, "log")) {
+    match("(Intercept)", colnames(design$X), nomatch = 0L)
+  } else {
+    0L
+  }
   logpost <- function(theta) {
-    .glmm_marginal_logpost(theta, design, redesign, pass, lay, gh, prior)
+    v <- .glmm_marginal_logpost(theta, design, redesign, pass, lay, gh, prior,
+                                rep_pos)
+    if (is.finite(v)) v else -Inf      # extreme theta (overflow) -> reject
   }
   chains <- vector("list", n_chains)
   for (c in seq_len(n_chains)) {
@@ -126,7 +147,7 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 4000L,
                                    adapt_start = max(100L, n_burn %/% 2L))
   }
 
-  draws <- .glmm_marginal_to_draws(chains, design, lay)
+  draws <- .glmm_marginal_to_draws(chains, design, lay, rep_pos)
   # The Gaussian LMM marginal is exact; the GLMM marginal is a quadrature
   # approximation --- reported honestly per family (I1).
   exact <- if (lay$has_sigma) "exact" else "approximate"
@@ -146,8 +167,10 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 4000L,
 
 # Assemble chains into a draws_array with named variables (b_<col> for
 # coefficients, sigma for the Gaussian residual SD, tau for the random-intercept
-# SD), back-transforming the log-scale sigma / tau.
-.glmm_marginal_to_draws <- function(chains, design, lay) {
+# SD), back-transforming the log-scale sigma / tau and (when `rep_pos` > 0)
+# recovering the coefficient intercept beta0 = alpha0 - tau^2 / 2 from its
+# sampled marginal-mean-level form.
+.glmm_marginal_to_draws <- function(chains, design, lay, rep_pos = 0L) {
   vnames <- paste0("b_", colnames(design$X))
   if (lay$has_sigma) vnames <- c(vnames, "sigma")
   vnames <- c(vnames, "tau")
@@ -157,7 +180,11 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 4000L,
   for (c in seq_along(chains)) {
     m <- chains[[c]]
     if (lay$has_sigma) m[, lay$sigma_idx] <- exp(m[, lay$sigma_idx])
-    m[, lay$tau_idx] <- exp(m[, lay$tau_idx])
+    tau <- exp(m[, lay$tau_idx])
+    m[, lay$tau_idx] <- tau
+    if (rep_pos > 0L) {
+      m[, rep_pos] <- m[, rep_pos] - tau^2 / 2
+    }
     arr[, c, ] <- m
   }
   posterior::as_draws_array(arr)

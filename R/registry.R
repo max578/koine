@@ -75,6 +75,27 @@ lens_spec <- function(id, label, tier, independence_key, role, exactness,
 .feat_re_intercept <- list(random_effects = TRUE, distributional = FALSE,
                            nonlinear = FALSE)
 
+# A heavy-tailed random-effect lens spec at a given Student-t df. The enrolled
+# battery is a grid over `nu` (a tail-weight spectrum, like the shrinkage
+# spectrum); each `nu` is a distinct structure variant, so stacking can favour
+# the random-effect tail-weight the data support. Single source of truth, used
+# by both the registry grid and the `fit_glmm_robust_re()` default.
+.robust_re_lens_spec <- function(nu) {
+  lens_spec(
+    id = sprintf("robust_re_t%g", nu),
+    label = sprintf("Heavy-tailed RE LMM (Student-t_%g intercepts)", nu),
+    tier = 1L,
+    independence_key = list(
+      family = "random_walk", kernel = sprintf("glmm-robust-re-t%g", nu)),
+    role = "opinion", exactness = "approximate",
+    maturity_tier = "koine-implemented-validated",
+    family_support = function(fs) fs$name == "gaussian",
+    feature_support = .feat_re_intercept, emits_loglik = TRUE,
+    fit_fn = function(pass, ls) fit_glmm_robust_re(pass, ls, nu = nu),
+    implemented = TRUE, structure_variant = TRUE,
+    validation_ref = "r-package/2026-06-01-koine-re-stage2b-aghq-robust-re")
+}
+
 #' The Stage-1 enrolment registry (leanest cut)
 #'
 #' @return A list of `koine_lens_spec` records.
@@ -178,12 +199,12 @@ koine_stage1_registry <- function() {
       role = "opinion", exactness = "approximate",
       maturity_tier = "koine-implemented-validated",
       # Validated (SBC + concordance) for gaussian + binomial. The Poisson path
-      # is implemented and its marginal likelihood is now accurate (adaptive
-      # Gauss-Hermite; SBC tau + slope calibrate), but it is NOT enrolled: the
-      # random-walk sampler mixes the strongly-confounded count INTERCEPT too
-      # poorly (b0 ESS ~5-12%) for SBC to pass. A better-mixing sampler
-      # (non-centred reparameterisation / block update) is the recorded next
-      # step (see the validation cairn).
+      # is implemented (adaptive Gauss-Hermite marginal + a log-link intercept
+      # reparameterisation that calibrates tau and the slope) but is NOT enrolled:
+      # the count INTERCEPT marginal still fails SBC (rank-mean biased high, p
+      # ~6e-10), a residual bias the random-walk kernel cannot clear. An
+      # HMC-grade sampler on the marginal is the recorded next step (validation
+      # cairn). Gaussian + binomial are unaffected.
       family_support = function(fs) fs$name %in% c("gaussian", "binomial"),
       feature_support = .feat_re_intercept, emits_loglik = FALSE,
       fit_fn = fit_glmm_marginal, implemented = TRUE,
@@ -196,25 +217,14 @@ koine_stage1_registry <- function() {
                                          kernel = "nimble-mwg-glmm"),
       role = "opinion", exactness = "exact",
       maturity_tier = "reference-validated",
-      # Mixed-model support is gaussian + binomial this increment, matching the
-      # validated marginal lens (a single Poisson RE lens could not form a
-      # diverse opinion anyway). The NIMBLE GLMM code itself handles Poisson.
+      # Gaussian + binomial --- matching the enrolled marginal lens (Poisson is
+      # held; see the glmm_marginal record).
       family_support = function(fs) fs$name %in% c("gaussian", "binomial"),
       feature_support = .feat_re_intercept, emits_loglik = FALSE,
       fit_fn = fit_nimble_glmm, implemented = TRUE
     ),
-    lens_spec(
-      id = "glmm_robust_re",
-      label = "Heavy-tailed random-effect LMM (Student-t random intercepts)",
-      tier = 1L, independence_key = list(family = "random_walk",
-                                         kernel = "glmm-robust-re"),
-      role = "opinion", exactness = "approximate",
-      maturity_tier = "koine-implemented-validated",
-      family_support = function(fs) fs$name == "gaussian",
-      feature_support = .feat_re_intercept, emits_loglik = TRUE,
-      fit_fn = fit_glmm_robust_re, implemented = TRUE, structure_variant = TRUE,
-      validation_ref = "r-package/2026-06-01-koine-re-stage2b-aghq-robust-re"
-    ),
+    .robust_re_lens_spec(3),
+    .robust_re_lens_spec(8),
     lens_spec(
       id = "bridge_evidence",
       label = "Marginal-likelihood evidence axis (bridge sampling)",
