@@ -96,7 +96,7 @@ fit_pg_gibbs <- function(pass, lens_spec = NULL, n_iter = 3000L,
   }
   draws <- .beta_chains_to_draws(chains, design)
   prov <- provenance_record(
-    method = lens_spec$id, method_version = "0.0.0.9000", impl_language = "R",
+    method = lens_spec$id, method_version = "0.1.0", impl_language = "R",
     seed = pass$seed, derived_seed = dseed, ir_hash = pass$ir_hash,
     maturity_tier = lens_spec$maturity_tier,
     independence_key = lens_spec$independence_key,

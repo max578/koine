@@ -197,13 +197,13 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 1500L,
   # approximation --- reported honestly per family (I1).
   exact <- if (lay$has_sigma) "exact" else "approximate"
   prov <- provenance_record(
-    method = lens_spec$id, method_version = "0.0.0.9000", impl_language = "R",
+    method = lens_spec$id, method_version = "0.1.0", impl_language = "R",
     seed = pass$seed, derived_seed = dseed, ir_hash = pass$ir_hash,
     maturity_tier = lens_spec$maturity_tier,
     independence_key = lens_spec$independence_key,
     role = lens_spec$role, exactness = exact,
     structure_variant = isTRUE(lens_spec$structure_variant),
-    lib_versions = list(koine = "0.0.0.9000"),
+    lib_versions = list(koine = "0.1.0"),
     trace = list(fit = sprintf(
       "glmm_marginal/NUTS completed (%d GH nodes, %d divergences, %d treedepth-saturated)",
       n_nodes, divergences, saturated)))

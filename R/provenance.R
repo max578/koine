@@ -37,7 +37,7 @@
 #' @return A `koine_provenance` object.
 #' @examples
 #' provenance_record(
-#'   method = "dram", method_version = "0.0.0.9000", impl_language = "R",
+#'   method = "dram", method_version = "0.1.0", impl_language = "R",
 #'   seed = 1L, derived_seed = 42L, ir_hash = "abc123",
 #'   maturity_tier = "reference-validated",
 #'   independence_key = list(family = "random_walk", kernel = "dram"),
@@ -72,7 +72,7 @@ provenance_record <- function(method, method_version, impl_language, seed,
 #'   otherwise raises `error.provenance_incomplete`.
 #' @examples
 #' prov <- provenance_record(
-#'   method = "dram", method_version = "0.0.0.9000", impl_language = "R",
+#'   method = "dram", method_version = "0.1.0", impl_language = "R",
 #'   seed = 1L, derived_seed = 42L, ir_hash = "abc123",
 #'   maturity_tier = "reference-validated",
 #'   independence_key = list(family = "random_walk", kernel = "dram"),

@@ -1,4 +1,10 @@
-# koine 0.0.0.9000
+# koine 0.1.0
+
+First tagged release --- the version carrying the IR-targetable, re-entrant model
+builder (`koine_pass_from_design()`) and the integration surface a parent
+triangulation panel drives, so koine clears the backend contract's construction,
+output, and determinism clauses. Licence declared **MIT**. Local-only,
+pre-graduation (the GRDC consultation is deferred to graduation, not a blocker).
 
 ## Stage-2 --- random-effects support (single random intercept)
 
