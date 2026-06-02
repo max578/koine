@@ -72,15 +72,21 @@ koine_can_contribute <- function(formula, data, family,
 #' `posterior::draws_array` over the parameters its contributing lenses share, by
 #' drawing from each retained lens in proportion to its LOO-stacking weight. This
 #' is the parameter-space representation a parent panel's parameter-marginal
-#' triangulation consumes. The stacking weights, the stacked predictive elpd, and
-#' any per-lens parameters dropped from the shared set ride along as attributes
-#' (`koine_weights`, `koine_elpd_stacked`, `koine_dropped_vars`).
+#' triangulation consumes. The stacking weights, the stacked predictive elpd, any
+#' per-lens parameters dropped from the shared set, and any scale parameters whose
+#' lens set was restricted ride along as attributes (`koine_weights`,
+#' `koine_elpd_stacked`, `koine_dropped_vars`, `koine_scale_restricted`).
 #'
 #' The mixture is over koine's own battery (a legitimate single opinion), never a
-#' pool across the parent's independent engines (charter SS4). It is exact for the
-#' shared fixed effects; mixing a variance parameter whose meaning differs across
-#' structure-variant lenses (e.g. a Student-t scale vs a Gaussian SD) is a
-#' representation, surfaced honestly via the weights.
+#' pool across the parent's independent engines (charter SS4). Each parameter is
+#' mixed only over the lenses for which it is comparable: the linear-predictor
+#' coefficients (`b_<col>`) over every contributing lens, but a scale parameter
+#' (`sigma`, `tau`) only over the family-likelihood lenses --- a likelihood-variant
+#' lens (the robust-t lens, which carries its own Student-t likelihood) reports its
+#' scale on a different metric, so it would bias the synthesised value if averaged
+#' in. The returned draws are therefore a per-parameter marginal representation
+#' (each column is its comparable-lens stacking mixture); the joint is approximate,
+#' which is exactly what a parameter-marginal triangulation needs.
 #'
 #' @param result A `koine_result` produced with `synthesise(pass,
 #'   keep_fits = TRUE)`. A `koine_abstention` is returned unchanged (koine
@@ -113,8 +119,14 @@ koine_opinion_draws <- function(result, n_draws = 4000L, seed = NULL) {
   }
   weights <- result$opinion$weights                # named simplex over kept ids
   by_id <- list()
+  family_lik <- list()        # id -> TRUE when the lens fits the pass family
   for (f in result$fits) {
     by_id[[f$provenance$method]] <- f$draws
+    # a lens carrying its OWN pointwise log-likelihood predicts under a different
+    # likelihood (e.g. the robust-t lens's Student-t), so its scale parameters
+    # (sigma, tau) are on a different scale than the family's -- only its
+    # linear-predictor coefficients are comparable.
+    family_lik[[f$provenance$method]] <- is.null(f$log_likelihood)
   }
   ids <- names(weights)
   if (!all(ids %in% names(by_id))) {
@@ -130,22 +142,46 @@ koine_opinion_draws <- function(result, n_draws = 4000L, seed = NULL) {
     stop("koine_opinion_draws(): contributing lenses share no common ",
          "parameter to mix over.", call. = FALSE)
   }
-  alloc <- .allocate_counts(weights, n_draws)
   if (is.null(seed)) {
     seed <- as.integer(strtoi(substr(result$ir_hash, 1L, 7L), base = 16L))
   }
   set.seed(seed)
-  pieces <- lapply(ids, function(id) {
-    m <- mats[[id]][, shared, drop = FALSE]
-    n_id <- alloc[[id]]
-    if (n_id == 0L) {
-      return(NULL)
+  # Mix each parameter only over the lenses for which it is comparable: the
+  # linear-predictor coefficients (`b_<col>`) over every contributing lens; a
+  # scale parameter (`sigma`, `tau`, ...) only over the family-likelihood lenses,
+  # since a likelihood-variant lens reports it on a different scale (a Student-t
+  # scale vs a Gaussian SD). This keeps the synthesised value on one meaning --
+  # the structure-variant scale is surfaced via the weights, never averaged into
+  # the family scale (charter SS4). The draws are thus a per-parameter marginal
+  # representation (the column for each parameter is its comparable-lens stacking
+  # mixture); the joint is approximate, which is what a parameter-marginal
+  # triangulation consumes.
+  restricted <- character(0)
+  cols <- lapply(shared, function(v) {
+    is_coef <- startsWith(v, "b_")
+    sub <- if (is_coef) {
+      ids
+    } else {
+      ids[vapply(ids, function(id) isTRUE(family_lik[[id]]), logical(1L))]
     }
-    idx <- sample.int(nrow(m), n_id, replace = nrow(m) < n_id)
-    m[idx, , drop = FALSE]
+    if (!length(sub) || sum(weights[sub]) == 0) {
+      sub <- ids                                 # degenerate: fall back to all
+    } else if (!is_coef && length(sub) < length(ids)) {
+      restricted <<- c(restricted, v)
+    }
+    alloc_v <- .allocate_counts(weights[sub], n_draws)
+    vals <- unlist(lapply(sub, function(id) {
+      n_id <- alloc_v[[id]]
+      if (n_id == 0L) {
+        return(numeric(0))
+      }
+      col <- mats[[id]][, v]
+      col[sample.int(length(col), n_id, replace = length(col) < n_id)]
+    }), use.names = FALSE)
+    vals[sample.int(length(vals))]               # shuffle within the column
   })
-  mix <- do.call(rbind, pieces)
-  mix <- mix[sample.int(nrow(mix)), , drop = FALSE]    # de-block the mixture
+  mix <- do.call(cbind, cols)
+  colnames(mix) <- shared
   arr <- posterior::as_draws_array(
     array(mix, dim = c(nrow(mix), 1L, ncol(mix)),
           dimnames = list(NULL, NULL, colnames(mix))))
@@ -153,6 +189,7 @@ koine_opinion_draws <- function(result, n_draws = 4000L, seed = NULL) {
   attr(arr, "koine_elpd_stacked") <- result$opinion$elpd_stacked
   attr(arr, "koine_dropped_vars") <-
     setdiff(Reduce(union, lapply(mats, colnames)), shared)
+  attr(arr, "koine_scale_restricted") <- unique(restricted)
   arr
 }
 

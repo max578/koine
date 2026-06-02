@@ -23,16 +23,22 @@ Materialises koine's single synthesised opinion as an equal-weight
 \code{posterior::draws_array} over the parameters its contributing lenses share, by
 drawing from each retained lens in proportion to its LOO-stacking weight. This
 is the parameter-space representation a parent panel's parameter-marginal
-triangulation consumes. The stacking weights, the stacked predictive elpd, and
-any per-lens parameters dropped from the shared set ride along as attributes
-(\code{koine_weights}, \code{koine_elpd_stacked}, \code{koine_dropped_vars}).
+triangulation consumes. The stacking weights, the stacked predictive elpd, any
+per-lens parameters dropped from the shared set, and any scale parameters whose
+lens set was restricted ride along as attributes (\code{koine_weights},
+\code{koine_elpd_stacked}, \code{koine_dropped_vars}, \code{koine_scale_restricted}).
 }
 \details{
 The mixture is over koine's own battery (a legitimate single opinion), never a
-pool across the parent's independent engines (charter SS4). It is exact for the
-shared fixed effects; mixing a variance parameter whose meaning differs across
-structure-variant lenses (e.g. a Student-t scale vs a Gaussian SD) is a
-representation, surfaced honestly via the weights.
+pool across the parent's independent engines (charter SS4). Each parameter is
+mixed only over the lenses for which it is comparable: the linear-predictor
+coefficients (\verb{b_<col>}) over every contributing lens, but a scale parameter
+(\code{sigma}, \code{tau}) only over the family-likelihood lenses --- a likelihood-variant
+lens (the robust-t lens, which carries its own Student-t likelihood) reports its
+scale on a different metric, so it would bias the synthesised value if averaged
+in. The returned draws are therefore a per-parameter marginal representation
+(each column is its comparable-lens stacking mixture); the joint is approximate,
+which is exactly what a parameter-marginal triangulation needs.
 }
 \examples{
 \donttest{

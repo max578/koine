@@ -1,3 +1,17 @@
+# koine 0.1.1
+
+* `koine_opinion_draws()` now mixes each parameter only over the lenses for which
+  it is comparable: the linear-predictor coefficients over every contributing
+  lens, but a scale parameter (`sigma`, `tau`) only over the family-likelihood
+  lenses. A likelihood-variant lens (the robust-t lens, which carries its own
+  Student-t likelihood) reports its scale on a different metric (a Student-t scale
+  rather than a Gaussian SD), so it is excluded from the scale mixture --- and
+  flagged in the new `koine_scale_restricted` attribute --- while still
+  contributing to the coefficients. This fixes a synthesised-`sigma` bias when a
+  likelihood-variant lens carried stacking weight (it dragged `sigma` toward the
+  t-scale); the fixed effects are unchanged. The draws are a per-parameter
+  marginal representation, which is what a parameter-marginal triangulation needs.
+
 # koine 0.1.0
 
 First tagged release --- the version carrying the IR-targetable, re-entrant model

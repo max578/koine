@@ -94,7 +94,7 @@ fit_robust_t <- function(pass, lens_spec = NULL, nu = 4,
     independence_key = lens_spec$independence_key,
     role = lens_spec$role, exactness = lens_spec$exactness,
     structure_variant = isTRUE(lens_spec$structure_variant),
-    lib_versions = list(koine = "0.1.0"),
+    lib_versions = list(koine = "0.1.1"),
     trace = list(fit = sprintf("robust-t (nu=%g) completed", nu)))
   fb_fit(draws = draws, provenance = prov, exactness = lens_spec$exactness,
          sample_stats = NULL, log_likelihood = log_lik, status = "contributed")

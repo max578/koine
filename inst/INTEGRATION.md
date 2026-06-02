@@ -103,10 +103,14 @@ ok <- koine::koine_can_contribute(formula, data, family)
    **Caveat (load-bearing).** The mixture is over koine's own battery --- a
    legitimate representation of koine's single opinion --- and is **not** a pool
    across the parent's independent engines (that would manufacture false
-   confidence). It is exact for the shared fixed effects; mixing a variance
-   parameter whose meaning differs across structure-variant lenses (a Student-t
-   scale versus a Gaussian SD) is a representation, surfaced honestly via the
-   weights.
+   confidence). Each parameter is mixed only over the lenses for which it is
+   comparable: the fixed-effect coefficients over every contributing lens, but a
+   scale parameter (`sigma`, `tau`) only over the family-likelihood lenses --- a
+   likelihood-variant lens (the robust-t lens) reports its scale on a different
+   metric, so it is excluded from the scale mixture (and flagged in the
+   `koine_scale_restricted` attribute) while still contributing to the
+   coefficients. The draws are thus a per-parameter marginal representation; the
+   joint is approximate, which is what a parameter-marginal triangulation needs.
 
 ## Parameter names (for the canonical-name mapper)
 

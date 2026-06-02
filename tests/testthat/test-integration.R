@@ -96,6 +96,41 @@ test_that("koine_opinion_draws blends lenses in proportion to their weights", {
   expect_equal(got, blended, tolerance = 0.03)            # weight-blended mean
 })
 
+test_that("koine_opinion_draws mixes a scale parameter only over same-likelihood lenses", {
+  # robust_t fits a Student-t likelihood, so its `sigma` is a t-scale, NOT the
+  # Gaussian SD. When it carries stacking weight, the synthesised `sigma` must
+  # stay on the family scale (the Gaussian lenses), never be dragged toward the
+  # t-scale -- while robust_t still contributes to the (comparable) fixed effects.
+  set.seed(424242L)
+  n <- 150L
+  x <- rnorm(n)
+  rnorm(n)                                   # advance RNG to match the fixture
+  y <- 1 + 2 * x + rnorm(n, sd = 0.5)
+  pass <- koine_pass_from_design(cbind(`(Intercept)` = 1, x = x), y, gaussian(),
+                                 seed = 4L)
+  res <- synthesise(pass, keep_fits = TRUE)
+  skip_if(is_abstention(res))
+  w <- res$opinion$weights
+  skip_if(!("robust_t" %in% names(w)) || w[["robust_t"]] < 0.1,
+          "robust_t carries no weight here")
+  # the per-lens sigmas: the Gaussian lenses ~0.467, robust_t's t-scale ~0.37
+  sig <- function(id) {
+    m <- posterior::as_draws_matrix(
+      res$fits[[which(vapply(res$fits, function(f) f$provenance$method, "") ==
+                        id)]]$draws)
+    mean(m[, "sigma"])
+  }
+  gaussian_sigma <- sig("dream_zs")
+  t_scale <- sig("robust_t")
+  expect_lt(t_scale, gaussian_sigma - 0.05)  # the t-scale is genuinely lower
+  dr <- koine_opinion_draws(res)
+  mix_sigma <- mean(posterior::as_draws_matrix(dr)[, "sigma"])
+  # the synthesised sigma tracks the Gaussian lenses, NOT the t-scale
+  expect_equal(mix_sigma, gaussian_sigma, tolerance = 0.02)
+  expect_gt(mix_sigma, t_scale + 0.05)
+  expect_true("sigma" %in% attr(dr, "koine_scale_restricted"))
+})
+
 test_that("koine_opinion_draws errors clearly without retained fits", {
   set.seed(1)
   d <- data.frame(x = rnorm(60))

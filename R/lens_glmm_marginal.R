@@ -203,7 +203,7 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 1500L,
     independence_key = lens_spec$independence_key,
     role = lens_spec$role, exactness = exact,
     structure_variant = isTRUE(lens_spec$structure_variant),
-    lib_versions = list(koine = "0.1.0"),
+    lib_versions = list(koine = "0.1.1"),
     trace = list(fit = sprintf(
       "glmm_marginal/NUTS completed (%d GH nodes, %d divergences, %d treedepth-saturated)",
       n_nodes, divergences, saturated)))
