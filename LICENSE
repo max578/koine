@@ -1,11 +1,2 @@
-Licence undeclared --- pending GRDC-Manager consultation.
-
-koine has no licence declared yet. A licence will be chosen only after the
-required consultation among the interested parties has taken place (see the
-project charter, section 5). The package is local-only and not distributed
-while this field reads as undeclared. When koine joins its target backend panel
-it is expected to align with that project's licence (GPL (>= 3)), but that is
-not a declaration --- it is a stated expectation pending the consultation.
-
-Do not redistribute this package, in whole or in part, until a licence has been
-declared in DESCRIPTION and this file has been replaced with the licence text.
+YEAR: 2026
+COPYRIGHT HOLDER: Max Moldovan

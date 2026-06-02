@@ -27,6 +27,9 @@ test_that("glmm_marginal draws carry b_<col> / sigma / tau and complete provenan
   expect_silent(validate_provenance(fit$provenance))
   expect_identical(fit$provenance$independence_key$kernel,
                    "glmm-marginal-quadrature")
+  # the lens rides the koine-authored Hamiltonian kernel (distinct inference
+  # family from the random-walk DRAM/DREAM lenses in the same battery).
+  expect_identical(fit$provenance$independence_key$family, "hamiltonian")
 })
 
 test_that("glmm_marginal on a GLMM is reported as an approximate (quadrature) fit", {
@@ -59,9 +62,10 @@ test_that("glmm_marginal fits a Poisson GLMM with a well-mixed intercept", {
   m <- stats::setNames(s$mean, s$variable)
   expect_equal(unname(m["b_x"]), 0.4, tolerance = 0.25)
   expect_true(all(s$rhat < 1.1))
-  # the log-link intercept reparameterisation keeps the count intercept mixing
-  # (it otherwise stalls at ~5-12% efficiency)
-  expect_gt(s$ess_bulk[s$variable == "b_(Intercept)"], 300)
+  # the Hamiltonian kernel traverses the confounded count-intercept ridge in one
+  # trajectory: the intercept mixes near-freely (the random-walk kernel stalled
+  # it at ~5-12% efficiency, the SBC-failing regime).
+  expect_gt(s$ess_bulk[s$variable == "b_(Intercept)"], 800)
 })
 
 test_that("glmm_marginal abstains on a population pass (lens scope)", {

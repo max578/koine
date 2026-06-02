@@ -1,0 +1,171 @@
+## ----------------------------------------------------------------------------
+## Integration surface --- the contract a parent panel (flexyBayes) drives
+##
+## koine is human-directly-unusable infrastructure: a parent triangulation
+## package hands it a model and a required output format, and koine returns a
+## synthesised opinion or a structured abstention. Two flexyBayes-AGNOSTIC
+## helpers make that handshake clean (koine knows nothing about flexyBayes's
+## classes; the parent owns the IR translation + the backend wrapper):
+##
+##   * `koine_can_contribute()` --- a cheap pre-flight predicate (no fitting):
+##     can koine field a diverse opinion for this model, or must it abstain?
+##     The parent's capability gate is then a one-liner.
+##   * `koine_opinion_draws()` --- materialise koine's opinion as a posterior
+##     `draws_array` over the parameters its contributing lenses share, by
+##     sampling each lens in proportion to its LOO-stacking weight. This is the
+##     representation a parameter-marginal triangulation consumes (a fourth
+##     posterior column).
+##
+## IMPORTANT (charter SS4 caveat). The mixture is over koine's OWN battery of
+## lenses --- a legitimate representation of koine's single synthesised opinion.
+## It is NOT a pool across the parent's independent engines (that would
+## manufacture false confidence and is forbidden). The stacking weights and the
+## stacked predictive elpd ride along as attributes so the parent can always
+## surface koine's native predictive-space signal alongside the draws.
+## ----------------------------------------------------------------------------
+
+#' Can koine contribute a diverse opinion for this model? (pre-flight)
+#'
+#' A cheap capability predicate --- it resolves the battery but fits nothing ---
+#' for a parent panel's backend-availability gate. Returns `TRUE` when at least
+#' two independent opinion lenses would enrol, or a single reason string from
+#' the abstention taxonomy otherwise (`"feature_unsupported"`,
+#' `"no_diverse_battery"`, or `"pass_invalid"` for a malformed model). Because
+#' the PSIS reliability gate and weight-degeneracy check can only be evaluated
+#' after fitting, a `TRUE` here is necessarily optimistic: koine may still abstain
+#' at [synthesise()] time. The predicate is the honest *floor*, not a guarantee.
+#'
+#' @param formula,data,family As for [koine_pass()].
+#' @param resources A resources list (see [koine_pass()]); defaults to tier 1.
+#' @param registry A registry list; defaults to [koine_stage1_registry()].
+#' @return `TRUE`, or a single reason-code string.
+#' @seealso [koine_opinion_draws()], [synthesise()]
+#' @export
+#' @examples
+#' d <- data.frame(y = rnorm(40), x = rnorm(40))
+#' koine_can_contribute(y ~ x, d, gaussian())
+koine_can_contribute <- function(formula, data, family,
+                                 resources = list(allowed_tiers = 1L),
+                                 registry = koine_stage1_registry()) {
+  pass <- tryCatch(
+    koine_pass(formula, data, family, resources = resources),
+    error = function(e) NULL)
+  if (is.null(pass)) {
+    return("pass_invalid")
+  }
+  if (isTRUE(pass$has_re) && !isTRUE(pass$re_supported)) {
+    return("feature_unsupported")
+  }
+  resolved <- resolve_battery(pass, registry)
+  n_opinion <- sum(vapply(resolved$enrolled,
+                          function(L) identical(L$role, "opinion"),
+                          logical(1L)))
+  if (n_opinion < 2L) {
+    return("no_diverse_battery")
+  }
+  TRUE
+}
+
+#' koine's opinion as a posterior draws array (the stacking mixture)
+#'
+#' Materialises koine's single synthesised opinion as an equal-weight
+#' `posterior::draws_array` over the parameters its contributing lenses share, by
+#' drawing from each retained lens in proportion to its LOO-stacking weight. This
+#' is the parameter-space representation a parent panel's parameter-marginal
+#' triangulation consumes. The stacking weights, the stacked predictive elpd, and
+#' any per-lens parameters dropped from the shared set ride along as attributes
+#' (`koine_weights`, `koine_elpd_stacked`, `koine_dropped_vars`).
+#'
+#' The mixture is over koine's own battery (a legitimate single opinion), never a
+#' pool across the parent's independent engines (charter SS4). It is exact for the
+#' shared fixed effects; mixing a variance parameter whose meaning differs across
+#' structure-variant lenses (e.g. a Student-t scale vs a Gaussian SD) is a
+#' representation, surfaced honestly via the weights.
+#'
+#' @param result A `koine_result` produced with `synthesise(pass,
+#'   keep_fits = TRUE)`. A `koine_abstention` is returned unchanged (koine
+#'   contributed no opinion to represent).
+#' @param n_draws Total draws in the returned mixture. Default 4000.
+#' @param seed Optional integer seed for the mixture sampling; defaults to a seed
+#'   derived from the pass's content hash, so the representation is reproducible.
+#' @return A one-chain `posterior::draws_array`, or the input abstention.
+#' @seealso [synthesise()], [koine_can_contribute()]
+#' @export
+#' @examples
+#' \donttest{
+#' set.seed(1)
+#' d <- data.frame(y = 1 + rnorm(80), x = rnorm(80))
+#' pass <- koine_pass(y ~ x, d, gaussian())
+#' res <- synthesise(pass, keep_fits = TRUE)
+#' if (!is_abstention(res)) {
+#'   dr <- koine_opinion_draws(res)
+#'   posterior::summarise_draws(dr, "mean", "sd")
+#' }
+#' }
+koine_opinion_draws <- function(result, n_draws = 4000L, seed = NULL) {
+  if (is_abstention(result)) {
+    return(result)
+  }
+  stopifnot(inherits(result, "koine_result"))
+  if (is.null(result$fits)) {
+    stop("koine_opinion_draws(): no per-lens fits on the result; ",
+         "call synthesise(pass, keep_fits = TRUE).", call. = FALSE)
+  }
+  weights <- result$opinion$weights                # named simplex over kept ids
+  by_id <- list()
+  for (f in result$fits) {
+    by_id[[f$provenance$method]] <- f$draws
+  }
+  ids <- names(weights)
+  if (!all(ids %in% names(by_id))) {
+    stop("koine_opinion_draws(): a weighted lens has no retained fit.",
+         call. = FALSE)
+  }
+  mats <- lapply(ids, function(id) {
+    unclass(posterior::as_draws_matrix(by_id[[id]]))
+  })
+  names(mats) <- ids
+  shared <- Reduce(intersect, lapply(mats, colnames))
+  if (length(shared) == 0L) {
+    stop("koine_opinion_draws(): contributing lenses share no common ",
+         "parameter to mix over.", call. = FALSE)
+  }
+  alloc <- .allocate_counts(weights, n_draws)
+  if (is.null(seed)) {
+    seed <- as.integer(strtoi(substr(result$ir_hash, 1L, 7L), base = 16L))
+  }
+  set.seed(seed)
+  pieces <- lapply(ids, function(id) {
+    m <- mats[[id]][, shared, drop = FALSE]
+    n_id <- alloc[[id]]
+    if (n_id == 0L) {
+      return(NULL)
+    }
+    idx <- sample.int(nrow(m), n_id, replace = nrow(m) < n_id)
+    m[idx, , drop = FALSE]
+  })
+  mix <- do.call(rbind, pieces)
+  mix <- mix[sample.int(nrow(mix)), , drop = FALSE]    # de-block the mixture
+  arr <- posterior::as_draws_array(
+    array(mix, dim = c(nrow(mix), 1L, ncol(mix)),
+          dimnames = list(NULL, NULL, colnames(mix))))
+  attr(arr, "koine_weights") <- weights
+  attr(arr, "koine_elpd_stacked") <- result$opinion$elpd_stacked
+  attr(arr, "koine_dropped_vars") <-
+    setdiff(Reduce(union, lapply(mats, colnames)), shared)
+  arr
+}
+
+# Allocate `n` integer draws across simplex weights `w` by largest remainder, so
+# the per-lens counts sum exactly to `n` (the dominant weight absorbs rounding).
+.allocate_counts <- function(w, n) {
+  w <- w / sum(w)
+  raw <- w * n
+  base <- floor(raw)
+  rem <- as.integer(round(n - sum(base)))
+  if (rem > 0L) {
+    ord <- order(raw - base, decreasing = TRUE)
+    base[ord[seq_len(rem)]] <- base[ord[seq_len(rem)]] + 1
+  }
+  stats::setNames(as.integer(base), names(w))
+}

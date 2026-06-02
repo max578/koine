@@ -7,10 +7,11 @@
 fit_glmm_marginal(
   pass,
   lens_spec = NULL,
-  n_iter = 4000L,
-  n_burn = 2000L,
+  n_iter = 1500L,
+  n_burn = 750L,
   n_chains = 4L,
-  n_nodes = 20L
+  n_nodes = 20L,
+  max_treedepth = 9L
 )
 }
 \arguments{
@@ -19,23 +20,33 @@ fit_glmm_marginal(
 \item{lens_spec}{The lens's registry record; defaults to the registry's
 \code{glmm_marginal} record.}
 
-\item{n_iter}{Iterations per chain (including burn-in).}
+\item{n_iter}{Iterations per chain (including warm-up). The Hamiltonian kernel
+needs far fewer than a random walk for the same effective sample size, so
+the default is modest.}
 
-\item{n_burn}{Burn-in iterations discarded per chain.}
+\item{n_burn}{Warm-up iterations per chain (step-size + mass-matrix
+adaptation), discarded from the returned draws.}
 
 \item{n_chains}{Number of chains.}
 
 \item{n_nodes}{Gauss-Hermite nodes for the GLMM marginal (ignored for the
 exact Gaussian LMM path).}
+
+\item{max_treedepth}{Maximum NUTS tree depth, capping the leapfrog budget per
+iteration at \code{2^max_treedepth}. Bounds the cost on a hard, wide-tau marginal
+(whose long trajectories would otherwise run away); saturation of the cap is
+surfaced in the provenance trace, never silently absorbed.}
 }
 \value{
 A \code{koine_fb_fit}, or a \code{koine_abstention} for an unsupported pass.
 }
 \description{
-Runs delayed-rejection adaptive Metropolis on the random-effects \emph{marginal}
+Runs the koine-authored No-U-Turn Sampler on the random-effects \emph{marginal}
 model --- the random intercepts integrated out, exactly for the Gaussian LMM
-and by Gauss-Hermite quadrature for a GLMM --- and returns an \code{\link[=fb_fit]{fb_fit()}} of
-\verb{(beta, sigma, tau)} draws. The pointwise log-likelihood is left \code{NULL} for
+and by adaptive Gauss-Hermite quadrature for a GLMM --- and returns an
+\code{\link[=fb_fit]{fb_fit()}} of \verb{(beta, sigma, tau)} draws. The gradient-informed kernel mixes
+the confounded count-intercept ridge of the Poisson marginal that a
+random-walk kernel could not. The pointwise log-likelihood is left \code{NULL} for
 \code{\link[=assemble_loglik]{assemble_loglik()}} to compute as the per-observation integrated predictive
 (F3). If the pass carries no supported random intercept, returns a lens-scope
 \code{\link[=abstention]{abstention()}} rather than a wrong fit (I1).

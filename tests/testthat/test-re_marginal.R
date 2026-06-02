@@ -108,6 +108,56 @@ test_that("adaptive GH makes the Poisson group marginal converge across tau", {
   }
 })
 
+test_that("marginal gradient matches finite differences (all families)", {
+  # the HMC kernel's correctness hinges on this: the analytic marginal gradient
+  # (closed form for the Gaussian LMM, the score-identity quadrature estimate
+  # for a GLMM) must equal the finite-difference gradient of the value.
+  gh <- koine:::.gh_rule(20L)
+  fd <- function(f, x, h = 1e-5) (f(x + h) - f(x - h)) / (2 * h)
+  for (fam in c("gaussian", "binomial", "poisson")) {
+    set.seed(match(fam, c("gaussian", "binomial", "poisson")))
+    fs <- as_family_spec(get(fam, mode = "function")())
+    n_g <- 6L
+    m <- 5L
+    grp <- rep(seq_len(n_g), each = m)
+    n <- n_g * m
+    eta0 <- stats::rnorm(n, 0, 0.6)
+    tau <- 0.8
+    sigma <- 1.1
+    aux <- if (fam == "gaussian") list(sigma = sigma) else list()
+    b <- stats::rnorm(n_g, 0, tau)
+    y <- switch(
+      fam,
+      gaussian = stats::rnorm(n, eta0 + b[grp], sigma),
+      binomial = stats::rbinom(n, 1L, stats::plogis(eta0 + b[grp])),
+      poisson = stats::rpois(n, exp(eta0 + b[grp])))
+    val <- function(eta, tt, ss) {
+      a <- if (fam == "gaussian") list(sigma = ss) else list()
+      koine:::.re_group_marginal_loglik(fs, y, eta, grp, tt, a, gh)
+    }
+    g <- koine:::.re_group_marginal_grad(fs, y, eta0, grp, tau, aux, gh)
+    # s_obs against d value / d eta_i on a few coordinates
+    idx <- c(1L, 12L, 23L, 30L)
+    s_fd <- vapply(idx, function(i) {
+      fd(function(d) {
+        e <- eta0
+        e[i] <- e[i] + d
+        val(e, tau, sigma)
+      }, 0)
+    }, numeric(1))
+    expect_equal(g$s_obs[idx], s_fd, tolerance = 1e-5)
+    # d value / d log tau
+    expect_equal(g$d_logtau, fd(function(lt) val(eta0, exp(lt), sigma),
+                                log(tau)), tolerance = 1e-5)
+    if (fam == "gaussian") {
+      expect_equal(g$d_logsigma, fd(function(ls) val(eta0, tau, exp(ls)),
+                                    log(sigma)), tolerance = 1e-5)
+    } else {
+      expect_true(is.na(g$d_logsigma))
+    }
+  }
+})
+
 test_that("Gauss-Laguerre rule integrates against x^alpha exp(-x)", {
   gl <- koine:::.gl_rule(32L, alpha = 1.5)
   expect_equal(sum(gl$weights), gamma(2.5))

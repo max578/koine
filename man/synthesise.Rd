@@ -7,7 +7,8 @@
 synthesise(
   pass,
   registry = koine_stage1_registry(),
-  on_degenerate = c("flag", "abstain")
+  on_degenerate = c("flag", "abstain"),
+  keep_fits = FALSE
 )
 }
 \arguments{
@@ -19,6 +20,11 @@ synthesise(
 (the battery corroborated rather than diversified): \code{"flag"} (default)
 returns the opinion with the degeneracy recorded in its diagnostics;
 \code{"abstain"} returns a \code{weight_degenerate} abstention (SS8).}
+
+\item{keep_fits}{If \code{TRUE}, attach the contributing per-lens fits to the
+result (its \code{fits} field), so \code{\link[=koine_opinion_draws]{koine_opinion_draws()}} can materialise the
+stacking-mixture posterior without re-fitting. Default \code{FALSE} (the
+diagnostic-only contract is unchanged).}
 }
 \value{
 A \code{koine_result} or a \code{koine_abstention}.

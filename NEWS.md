@@ -15,12 +15,14 @@
 * Two orthogonal mixed-model lenses, stacked on the identical per-observation
   *integrated* predictive (the random effect marginalised under each draw's
   variance components, so PSIS stays in its reliable regime): `fit_glmm_marginal()`
-  --- a koine-authored random-walk sampler that integrates the random effects
-  out (exact for the Gaussian LMM, Gauss-Hermite quadrature for a GLMM) --- and
-  `fit_nimble_glmm()` --- NIMBLE Gibbs that samples the random effects. The two
-  carry identical priors, so their agreement is method-independent consensus.
-  Enrolled (validated) for the Gaussian LMM and the binomial GLMM (the Poisson
-  GLMM is implemented but held experimental --- see below).
+  --- a koine-authored No-U-Turn (Hamiltonian) sampler that integrates the random
+  effects out (exact for the Gaussian LMM, adaptive Gauss-Hermite quadrature for a
+  GLMM) and rides the marginal's analytic gradient (the score identity for a GLMM,
+  closed form for the Gaussian) --- and `fit_nimble_glmm()` --- NIMBLE Gibbs that
+  samples the random effects. The two carry identical priors, so their agreement
+  is method-independent consensus. Enrolled (validated) for the Gaussian LMM and
+  the binomial GLMM (the Poisson GLMM is implemented but held experimental ---
+  see below).
 * A heavy-tailed random-effect lens, `fit_glmm_robust_re()`: a Gaussian LMM
   whose random intercepts are Student-t (`b_g ~ t_nu`), integrated out via the
   Normal scale-mixture (Gauss-Laguerre over the mixing scale). It is enrolled as
@@ -51,11 +53,29 @@
 * The validation harness covers every mixed-model lens; the enrolled ones are
   validated by SBC plus cross-implementation concordance against NIMBLE
   (recorded study in `inst/validation/`). The Poisson GLMM remains held
-  experimental and is not enrolled: adaptive Gauss-Hermite fixed its
-  marginal-likelihood quadrature and a log-link intercept reparameterisation
-  calibrated its variance component and slope, but the count-intercept marginal
-  still fails SBC (a residual bias the random-walk kernel does not clear) --- an
-  HMC-grade sampler is the recorded next step.
+  experimental and is not enrolled. The Hamiltonian kernel fixes the
+  count-intercept mixing that the random walk could not (the original failure),
+  but a minority of prior-plausible datasets with a large random-intercept SD
+  give the marginal a variance-component funnel that a static-metric sampler
+  cannot traverse cheaply (occasional divergences and order-minutes fits).
+  Because the random effects are marginalised, the usual non-centred remedy does
+  not apply; the recorded next step is a funnel-robust metric (Riemannian /
+  Fisher information, reused from the quadrature) or a bounded enrolled-tau range.
+* `koine_pass_from_design()` --- an IR-targetable, re-entrant, deparse-free model
+  builder that constructs a pass directly from a named design matrix, a response,
+  a family, and an optional grouping vector (no model formula, no `match.call()`
+  capture, no session-global state). This is the programmatic entry a parent
+  triangulation panel drives (the backend contract's construction clause); it
+  preserves non-syntactic canonical column names such as `(Intercept)` verbatim.
+* Integration surface for a parent triangulation panel (the contract is in
+  `inst/INTEGRATION.md`): `koine_opinion_draws()` materialises the single
+  synthesised opinion as a posterior `draws_array` over the parameters its
+  contributing lenses share, sampling each lens in proportion to its stacking
+  weight (a mixture over koine's own battery, with the stacking weights and
+  stacked predictive elpd surfaced as attributes --- never a pool across the
+  parent's independent engines). `synthesise()` gains `keep_fits` to retain the
+  per-lens fits for it, and `koine_can_contribute()` is a cheap pre-flight
+  capability predicate for the parent's backend-availability gate.
 
 ## Stage-1 --- the synthesis spine
 

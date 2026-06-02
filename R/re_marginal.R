@@ -82,32 +82,59 @@
 # accurate with few nodes. The quadrature still converges to the exact integral
 # --- it is a node placement, not a Laplace approximation to the posterior.
 .aghq_marginal <- function(family_spec, y, eta_fixed, unit, tau, aux,
-                           gh = NULL) {
+                           gh = NULL, return_post = FALSE) {
   if (is.null(gh)) {
     gh <- .gh_rule(20L)
   }
   uf <- as.integer(factor(unit))
   n_u <- max(uf)
+  nq <- length(gh$nodes)
   inv_t2 <- 1 / tau^2
   b <- numeric(n_u)
-  for (it in seq_len(10L)) {
+  # Newton-iterate to the per-unit mode b-hat. Run to a tight tolerance: a
+  # stationary mode makes the node placement b-hat(theta) / sd-hat(theta) locally
+  # insensitive to theta, so the score-identity gradient below (which holds the
+  # nodes fixed) matches the gradient of the computed quadrature to quadrature
+  # order --- the condition the finite-difference gradient gate verifies.
+  for (it in seq_len(50L)) {
     eta <- eta_fixed + b[uf]
-    g1 <- as.numeric(rowsum(family_spec$dlp_deta(y, eta, aux), uf)) - b * inv_t2
-    g2 <- as.numeric(rowsum(family_spec$d2lp_deta2(y, eta, aux), uf)) - inv_t2
-    b <- b - g1 / g2
+    d1 <- family_spec$dlp_deta(y, eta, aux)
+    d2 <- family_spec$d2lp_deta2(y, eta, aux)
+    # extreme theta along a Hamiltonian trajectory can overflow the GLM mean
+    # (e.g. exp(eta) for the log-link Poisson). Bail rather than crash: the
+    # downstream value is then non-finite and the lens marks a divergence.
+    if (!all(is.finite(d1)) || !all(is.finite(d2))) break
+    g1 <- as.numeric(rowsum(d1, uf)) - b * inv_t2
+    g2 <- as.numeric(rowsum(d2, uf)) - inv_t2
+    step <- g1 / g2
+    if (!all(is.finite(step))) break
+    b <- b - step
+    if (max(abs(step)) < 1e-10) break
   }
   info <- -(as.numeric(rowsum(family_spec$d2lp_deta2(y, eta_fixed + b[uf], aux),
                               uf)) - inv_t2)
   sd_hat <- sqrt(1 / info)
   log_w <- log(gh$weights)
-  cols <- vapply(seq_along(gh$nodes), function(k) {
+  # log integrand at every (unit, node): the n_u x nq matrix of fu + log weight.
+  b_nodes <- matrix(NA_real_, nrow = n_u, ncol = nq)
+  lcols <- matrix(NA_real_, nrow = n_u, ncol = nq)
+  for (k in seq_len(nq)) {
     bk <- b + sqrt(2) * sd_hat * gh$nodes[k]
+    b_nodes[, k] <- bk
     fu <- as.numeric(rowsum(family_spec$loglik_pointwise(y, eta_fixed + bk[uf],
                                                          aux), uf)) +
       stats::dnorm(bk, 0, tau, log = TRUE)
-    fu + log_w[k] + gh$nodes[k]^2
-  }, numeric(n_u))
-  log(sqrt(2) * sd_hat) + .row_log_sum_exp(matrix(cols, nrow = n_u))
+    lcols[, k] <- fu + log_w[k] + gh$nodes[k]^2
+  }
+  lse <- .row_log_sum_exp(lcols)
+  value <- log(sqrt(2) * sd_hat) + lse
+  if (!return_post) {
+    return(value)
+  }
+  # posterior weights over the quadrature nodes (the discrete tilted density
+  # q_u, normalised per unit): w_post[u, k] proportional to exp(lcols[u, k]).
+  w_post <- exp(lcols - lse)
+  list(value = value, uf = uf, b_nodes = b_nodes, w_post = w_post)
 }
 
 #' Per-observation integrated random-effect predictive (Stage-2)
@@ -188,6 +215,79 @@
 
 .re_group_marginal_gaussian <- function(y, eta_fixed, group, tau, sigma) {
   sum(.re_group_gaussian_vec(y, eta_fixed, group, tau, sigma))
+}
+
+## ----------------------------------------------------------------------------
+## Gradient of the per-group marginal log-likelihood (Stage-2; HMC kernel)
+##
+## The Hamiltonian marginal lens needs the gradient of the marginal log-
+## likelihood with respect to the fixed-part linear predictor (so the chain rule
+## delivers d/d beta = X' s) and with respect to log tau (and log sigma for the
+## Gaussian LMM). Two routes, matching the two value routes:
+##   * Gaussian LMM --- the marginal is exactly normal per group, so the gradient
+##     is closed form (the GLS residual gives s; the variance-component
+##     derivatives come from the matrix-determinant / Sherman-Morrison identities
+##     used for the value).
+##   * GLMM --- the score (Fisher) identity: d/d theta log int exp(f(b)) db =
+##     E_{q(b)}[d/d theta f(b)], with q(b) propto exp(f(b)) the tilted density.
+##     The adaptive Gauss-Hermite nodes and their normalised posterior weights
+##     (`return_post`) approximate that expectation directly, so one quadrature
+##     pass returns both the value and the gradient. Verified against finite
+##     differences of the value (the `test-re_marginal` gradient gate).
+## Returns: `value` (scalar), `s_obs` (length-N expected score per observation),
+## `d_logtau` (d value / d log tau, holding eta_fixed fixed), and `d_logsigma`
+## (Gaussian only; `NA` otherwise).
+## ----------------------------------------------------------------------------
+.re_group_marginal_grad <- function(family_spec, y, eta_fixed, group, tau, aux,
+                                    gh = NULL) {
+  if (.re_is_gaussian_lmm(family_spec)) {
+    return(.re_group_gaussian_grad(y, eta_fixed, group, tau, aux$sigma))
+  }
+  post <- .aghq_marginal(family_spec, y, eta_fixed, group, tau, aux, gh,
+                         return_post = TRUE)
+  uf <- post$uf
+  n_u <- nrow(post$w_post)
+  nq <- ncol(post$w_post)
+  s_obs <- numeric(length(y))
+  eb2 <- numeric(n_u)
+  for (k in seq_len(nq)) {
+    bk <- post$b_nodes[, k]
+    w_obs <- post$w_post[uf, k]
+    s_obs <- s_obs +
+      w_obs * family_spec$dlp_deta(y, eta_fixed + bk[uf], aux)
+    eb2 <- eb2 + post$w_post[, k] * bk^2
+  }
+  list(value = sum(post$value), s_obs = s_obs,
+       d_logtau = sum(eb2 / tau^2 - 1), d_logsigma = NA_real_)
+}
+
+# Closed-form gradient of the exact Gaussian-LMM per-group marginal. `s_obs` is
+# the GLS residual Sigma_g^-1 (y_g - eta_g) per observation (so d/d beta = X' s);
+# the variance-component derivatives are d value / d log sigma and d value / d
+# log tau via the compound-symmetry determinant / quadratic-form derivatives.
+.re_group_gaussian_grad <- function(y, eta_fixed, group, tau, sigma) {
+  s2 <- sigma^2
+  t2 <- tau^2
+  r <- y - eta_fixed
+  gf <- as.integer(factor(group))
+  m <- as.numeric(table(gf))                       # group sizes
+  sum_r <- as.numeric(rowsum(r, gf))
+  d_grp <- s2 + m * t2                             # D_g = sigma^2 + m_g tau^2
+  # GLS residual per observation: (1/s2)(r_i - (t2 / D_g) sum_r_g)
+  s_obs <- (r - (t2 / d_grp)[gf] * sum_r[gf]) / s2
+  sum_r2 <- as.numeric(rowsum(r^2, gf))
+  b_quad <- sum_r^2                                # B_g = (sum r_g)^2
+  # d log p_g / d t2 = -0.5 (m/D) + 0.5 B/D^2 ; d/d log tau = sum_g (.) * 2 t2
+  dlp_dt2 <- -0.5 * m / d_grp + 0.5 * b_quad / d_grp^2
+  d_logtau <- sum(dlp_dt2) * 2 * t2
+  # d log p_g / d s2, then d/d log sigma = sum_g (.) * 2 s2
+  dlogdet_ds2 <- m / s2 - m * t2 / (s2 * d_grp)
+  dquad_ds2 <- -sum_r2 / s2^2 +
+    t2 * b_quad * (d_grp + s2) / (s2 * d_grp)^2
+  dlp_ds2 <- -0.5 * (dlogdet_ds2 + dquad_ds2)
+  d_logsigma <- sum(dlp_ds2) * 2 * s2
+  list(value = .re_group_marginal_gaussian(y, eta_fixed, group, tau, sigma),
+       s_obs = s_obs, d_logtau = d_logtau, d_logsigma = d_logsigma)
 }
 
 # Generalized Gauss-Laguerre rule (weight x^alpha exp(-x) on [0, Inf)) of order

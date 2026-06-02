@@ -193,18 +193,23 @@ koine_stage1_registry <- function() {
     ),
     lens_spec(
       id = "glmm_marginal",
-      label = "Marginal mixed model (random-walk, RE integrated out)",
-      tier = 1L, independence_key = list(family = "random_walk",
+      label = "Marginal mixed model (Hamiltonian NUTS, RE integrated out)",
+      tier = 1L, independence_key = list(family = "hamiltonian",
                                          kernel = "glmm-marginal-quadrature"),
       role = "opinion", exactness = "approximate",
       maturity_tier = "koine-implemented-validated",
-      # Validated (SBC + concordance) for gaussian + binomial. The Poisson path
-      # is implemented (adaptive Gauss-Hermite marginal + a log-link intercept
-      # reparameterisation that calibrates tau and the slope) but is NOT enrolled:
-      # the count INTERCEPT marginal still fails SBC (rank-mean biased high, p
-      # ~6e-10), a residual bias the random-walk kernel cannot clear. An
-      # HMC-grade sampler on the marginal is the recorded next step (validation
-      # cairn). Gaussian + binomial are unaffected.
+      # Validated (SBC + concordance) for gaussian + binomial, which the
+      # Hamiltonian kernel samples cleanly (well-mixed, near-zero divergences).
+      # Poisson is NOT enrolled: the NUTS kernel fixes the count-INTERCEPT mixing
+      # the random walk could not (the original SBC failure), but a minority of
+      # prior-plausible datasets with a large random-intercept SD (tau > 2) give
+      # the marginal a variance-component FUNNEL that a static-metric NUTS cannot
+      # traverse cheaply -- ~5-10% divergences and order-minutes fits, neither
+      # production-viable nor calibration-safe. Marginalising the random effects
+      # rules out the usual non-centred fix, so the recorded next step is a
+      # funnel-robust metric (Riemannian / Fisher-SoftAbs, reusing the AGHQ
+      # information) or a bounded enrolled-tau range. Gaussian + binomial are
+      # unaffected.
       family_support = function(fs) fs$name %in% c("gaussian", "binomial"),
       feature_support = .feat_re_intercept, emits_loglik = FALSE,
       fit_fn = fit_glmm_marginal, implemented = TRUE,

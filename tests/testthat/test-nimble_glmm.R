@@ -61,7 +61,7 @@ test_that("synthesise produces a mixed-model opinion; degeneracy is honest", {
   skip_if(is_abstention(res), "PSIS gate borderline; abstention is principled")
   expect_s3_class(res, "koine_result")
   expect_equal(sum(res$opinion$weights), 1, tolerance = 1e-6)
-  expect_setequal(res$independence$family, c("random_walk", "gibbs"))
+  expect_setequal(res$independence$family, c("hamiltonian", "gibbs"))
   # for a Gaussian LMM the two lenses corroborate (a solved problem); koine
   # reports the degeneracy honestly rather than manufacturing diversity
   expect_true(res$diagnostics$weight_concentration$n_eff <= 2)

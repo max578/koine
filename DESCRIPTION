@@ -18,7 +18,7 @@ Description: Synthesises one coherent, independent predictive opinion for a
     is required at read time. Abstention is a first-class, honest outcome.
 URL: https://github.com/max578/koine
 BugReports: https://github.com/max578/koine/issues
-License: file LICENSE
+License: MIT + file LICENSE
 Encoding: UTF-8
 Language: en-GB
 Depends:

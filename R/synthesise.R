@@ -245,6 +245,10 @@ weight_concentration <- function(weights, n_eff_threshold = 1.5) {
 #'   (the battery corroborated rather than diversified): `"flag"` (default)
 #'   returns the opinion with the degeneracy recorded in its diagnostics;
 #'   `"abstain"` returns a `weight_degenerate` abstention (SS8).
+#' @param keep_fits If `TRUE`, attach the contributing per-lens fits to the
+#'   result (its `fits` field), so [koine_opinion_draws()] can materialise the
+#'   stacking-mixture posterior without re-fitting. Default `FALSE` (the
+#'   diagnostic-only contract is unchanged).
 #' @return A `koine_result` or a `koine_abstention`.
 #' @export
 #' @examples
@@ -254,7 +258,8 @@ weight_concentration <- function(weights, n_eff_threshold = 1.5) {
 #' res <- synthesise(pass, registry = list(koine_stage1_registry()[[1]]))
 #' is_abstention(res)
 synthesise <- function(pass, registry = koine_stage1_registry(),
-                       on_degenerate = c("flag", "abstain")) {
+                       on_degenerate = c("flag", "abstain"),
+                       keep_fits = FALSE) {
   on_degenerate <- match.arg(on_degenerate)
   stopifnot(inherits(pass, "koine_pass"))
   if (isTRUE(pass$has_re) && !isTRUE(pass$re_supported)) {
@@ -306,7 +311,8 @@ synthesise <- function(pass, registry = koine_stage1_registry(),
   structure(
     list(opinion = stacked, gate = gate, diagnostics = diagnostics,
          independence = independence_report(fits),
-         excluded = resolved$excluded, ir_hash = pass$ir_hash),
+         excluded = resolved$excluded, ir_hash = pass$ir_hash,
+         fits = if (isTRUE(keep_fits)) fits else NULL),
     class = "koine_result"
   )
 }

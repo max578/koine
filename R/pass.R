@@ -119,6 +119,122 @@ koine_pass <- function(formula, data, family,
   pass
 }
 
+#' Construct a koine `pass` from design arrays (the IR-targetable builder)
+#'
+#' The programmatic, re-entrant, deparse-free entry point a parent triangulation
+#' panel drives (flexyBayes backend-contract clause 1): build a pass directly
+#' from a named design matrix, a response, a family, and an optional grouping
+#' vector --- no model formula, no `match.call()` capture, no session-global
+#' state. Two passes can be built and synthesised in the same process without
+#' interference. The stored design is used verbatim downstream, so non-syntactic
+#' canonical column names (e.g. `(Intercept)`) pass through untouched.
+#'
+#' @param x A numeric design matrix with named columns (the fixed-effects design;
+#'   include an `(Intercept)` column if wanted). Column names become the
+#'   coefficient names (`b_<col>` in the draws).
+#' @param y The response vector (length `nrow(x)`).
+#' @param family A base-R `family` object or a known family name.
+#' @param group Optional grouping vector (length `nrow(x)`) for a single random
+#'   intercept `(1 | group)`; `NULL` for a population model.
+#' @param coef_names Optional column names for `x` (defaults to `colnames(x)`).
+#' @param response_name Name recorded for the response (default `"y"`).
+#' @param grouping_name Name recorded for the grouping factor (default `"g"`).
+#' @inheritParams koine_pass
+#' @return A validated object of class `koine_pass`.
+#' @seealso [koine_pass()], [koine_opinion_draws()]
+#' @export
+#' @examples
+#' set.seed(1)
+#' x <- cbind(`(Intercept)` = 1, z = rnorm(40))
+#' y <- 1 + 0.5 * x[, "z"] + rnorm(40)
+#' pass <- koine_pass_from_design(x, y, gaussian())
+#' pass$has_re             # FALSE -- a population model, built without a formula
+koine_pass_from_design <- function(x, y, family, group = NULL,
+                                   coef_names = colnames(x),
+                                   response_name = "y", grouping_name = "g",
+                                   required_outputs = c("posterior",
+                                                        "log_likelihood"),
+                                   seed = 1L, obs_id = NULL,
+                                   resources = list(allowed_tiers = 1L),
+                                   prior = NULL) {
+  x <- as.matrix(x)
+  if (is.null(coef_names) || length(coef_names) != ncol(x)) {
+    stop("koine_pass_from_design(): `x` must have one name per column ",
+         "(set colnames(x) or pass coef_names).", call. = FALSE)
+  }
+  colnames(x) <- coef_names
+  y <- as.numeric(y)
+  n <- nrow(x)
+  if (length(y) != n) {
+    stop("koine_pass_from_design(): length(y) must equal nrow(x).",
+         call. = FALSE)
+  }
+  if (!is.null(group) && length(group) != n) {
+    stop("koine_pass_from_design(): length(group) must equal nrow(x).",
+         call. = FALSE)
+  }
+  if (is.null(obs_id)) {
+    obs_id <- sprintf("obs_%04d", seq_len(n))
+  }
+  if (length(obs_id) != n || anyDuplicated(obs_id)) {
+    stop("koine_pass_from_design(): `obs_id` must be unique, length nrow(x).",
+         call. = FALSE)
+  }
+  fam_spec <- as_family_spec(family)
+  design <- list(X = x, y = y, N = n, K = ncol(x))
+  has_re <- !is.null(group)
+  re_design <- NULL
+  re_terms <- list()
+  if (has_re) {
+    gf <- factor(group)
+    re_design <- list(grouping = grouping_name, group = as.integer(gf),
+                      levels = levels(gf), n_groups = nlevels(gf))
+    re_terms <- list(list(grouping = grouping_name, lhs = "1",
+                          random_intercept = TRUE))
+  }
+  # The accessors and most lenses use the stored design directly. A few lenses
+  # are formula-driven (the bayesreg shrinkage lens), so synthesise an internal
+  # formula + frame from the design: the predictor columns under their own names
+  # (an all-ones column is dropped -- bayesreg adds its own intercept), with the
+  # response. This stays deparse-free and re-entrant -- the formula is built from
+  # the arrays, never captured from a front-end call.
+  intercept_cols <- which(apply(x, 2L, function(v) all(v == 1)))
+  has_intercept <- length(intercept_cols) > 0L
+  pred_idx <- setdiff(seq_len(ncol(x)), intercept_cols)
+  pred_names <- colnames(x)[pred_idx]
+  data <- as.data.frame(x[, pred_idx, drop = FALSE], check.names = FALSE)
+  data[[response_name]] <- y
+  if (has_re) data[[grouping_name]] <- factor(group)
+  formula <- if (length(pred_names)) {
+    stats::reformulate(sprintf("`%s`", pred_names), response = response_name,
+                       intercept = has_intercept)
+  } else {
+    stats::reformulate("1", response = response_name)
+  }
+  pass <- list(
+    format_version = "0.1.0",
+    built_from = "design",
+    formula = formula,
+    fixed_formula = formula,
+    re_terms = re_terms,
+    has_re = has_re,
+    re_supported = has_re,            # a single random intercept, by construction
+    response = response_name,
+    data = data,
+    design = design,
+    re_design = re_design,
+    family = fam_spec,
+    prior = prior,
+    obs_dim_names = list(obs_id = obs_id, coords = NULL),
+    required_outputs = required_outputs,
+    seed = as.integer(seed),
+    resources = resources
+  )
+  pass$ir_hash <- .pass_ir_hash(pass)
+  class(pass) <- "koine_pass"
+  pass
+}
+
 # Content hash over a canonical serialisation of the pass (Stage-0 SS2.4),
 # excluding ir_hash itself. The hash is the provenance join key.
 .pass_ir_hash <- function(pass) {
@@ -154,6 +270,11 @@ koine_pass <- function(formula, data, family,
 #' @return A list with `X` (model matrix), `y` (response vector), `N`, and `K`.
 #' @keywords internal
 .pass_design <- function(pass) {
+  # a design-built pass (koine_pass_from_design) carries the design verbatim;
+  # use it directly so non-syntactic column names (e.g. "(Intercept)") survive.
+  if (!is.null(pass$design)) {
+    return(pass$design)
+  }
   ff <- if (!is.null(pass$fixed_formula)) pass$fixed_formula else pass$formula
   mf <- stats::model.frame(ff, data = pass$data)
   X <- stats::model.matrix(ff, data = mf)
@@ -174,6 +295,9 @@ koine_pass <- function(formula, data, family,
 .pass_re_design <- function(pass) {
   if (!isTRUE(pass$has_re)) {
     return(NULL)
+  }
+  if (!is.null(pass$re_design)) {
+    return(pass$re_design)
   }
   grouping <- pass$re_terms[[1L]]$grouping
   f <- factor(pass$data[[grouping]])
