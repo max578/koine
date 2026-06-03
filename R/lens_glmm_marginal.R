@@ -323,14 +323,12 @@
   alpha
 }
 
-# One blocked chain: alternate a 1-D slice update of log tau with a koine-NUTS
-# transition of the coefficient block at the sliced tau. Warm-up mirrors
-# `.nuts_one_chain` for the coefficient block (identity-metric step-size
-# adaptation -> dense mass matrix from collected positions -> re-adapted step
-# size), with the slice width set from the warm-up spread of log tau. Returns the
-# same (kept x dim) draw matrix layout the joint kernel returns (coefficients on
-# the sampled level scale, log tau on the log scale), plus the coefficient-block
-# divergence count (surfaced, never hidden).
+# One blocked chain: slice log tau, then slice the coefficients along their
+# tau-resolved Laplace principal axes. The axes (`knots`) are built from this
+# chain's warm start (`lpg_full` supplies the conditional mode + curvature); the
+# log-tau slice width is set from the warm-up spread. Returns the (kept x dim) draw
+# matrix in the same layout the joint kernel returns (coefficients on the sampled
+# level scale, log tau on the log scale).
 .glmm_marginal_blocked_chain <- function(init, lpg_full, lpg_val, lay, n_iter,
                                          n_warmup) {
   alpha <- init[lay$coef_idx]
@@ -342,10 +340,6 @@
     theta[lay$tau_idx] <- z
     lpg_val(theta)
   }
-
-  # the tau-resolved coefficient slice axes (scaled principal axes of the
-  # conditional's Laplace covariance per log-tau knot), built once from the warm
-  # start (the mode + curvature need the gradient path, `lpg_full`).
   knots <- .glmm_build_tau_knots(lpg_full, lay, alpha)
 
   # one sweep: slice log tau | alpha, then slice the coefficients | tau along their
@@ -476,11 +470,8 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 1500L,
     init[lay$coef_idx] <- start + stats::rnorm(design$K, 0, 0.5)
     if (lay$has_sigma) init[lay$sigma_idx] <- stats::rnorm(1, 0, 0.5)
     init[lay$tau_idx] <- stats::rnorm(1, 0, 0.5)
-    # target_accept 0.9 (above the NUTS default 0.8): the weakly-identified
-    # variance component gives the marginal a tau funnel, and the smaller adapted
-    # step size clears the neck with fewer divergences. max_treedepth caps the
-    # leapfrog budget per iteration (2^depth) so a hard, wide-tau marginal cannot
-    # run unbounded; saturation of the cap is surfaced (never silently absorbed).
+    # target_accept 0.9 (above the NUTS default 0.8) and max_treedepth cap the
+    # joint-NUTS Gaussian / binomial path; the Poisson blocked path needs neither.
     ch <- if (use_blocked) {
       .glmm_marginal_blocked_chain(init, lpg, lpg_val, lay, n_iter = n_iter,
                                    n_warmup = n_burn)
