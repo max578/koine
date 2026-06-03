@@ -17,7 +17,8 @@
   "calibration_failed",   # tier-2 gate; recalibration insufficient
   "resource_exceeded",    # time / memory / tier budget
   "validation_gate",      # a koine-first lens not yet validated
-  "weight_degenerate"     # stacking collapsed to one component (diversity lost)
+  "weight_degenerate",    # stacking collapsed to one component (diversity lost)
+  "convergence_failed"    # a lens's sampler did not converge (poor ess / rhat)
 )
 
 #' Construct a structured abstention

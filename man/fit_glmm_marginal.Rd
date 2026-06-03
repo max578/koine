@@ -32,10 +32,10 @@ adaptation), discarded from the returned draws.}
 \item{n_nodes}{Gauss-Hermite nodes for the GLMM marginal (ignored for the
 exact Gaussian LMM path).}
 
-\item{max_treedepth}{Maximum NUTS tree depth, capping the leapfrog budget per
-iteration at \code{2^max_treedepth}. Bounds the cost on a hard, wide-tau marginal
-(whose long trajectories would otherwise run away); saturation of the cap is
-surfaced in the provenance trace, never silently absorbed.}
+\item{max_treedepth}{Maximum NUTS tree depth (the joint-NUTS Gaussian / binomial
+path only), capping the leapfrog budget per iteration at \code{2^max_treedepth};
+saturation of the cap is surfaced in the provenance trace, never silently
+absorbed. The Poisson blocked slice kernel has no tree depth.}
 }
 \value{
 A \code{koine_fb_fit}, or a \code{koine_abstention} for an unsupported pass.
@@ -44,12 +44,15 @@ A \code{koine_fb_fit}, or a \code{koine_abstention} for an unsupported pass.
 Runs the koine-authored No-U-Turn Sampler on the random-effects \emph{marginal}
 model --- the random intercepts integrated out, exactly for the Gaussian LMM
 and by adaptive Gauss-Hermite quadrature for a GLMM --- and returns an
-\code{\link[=fb_fit]{fb_fit()}} of \verb{(beta, sigma, tau)} draws. The gradient-informed kernel mixes
-the confounded count-intercept ridge of the Poisson marginal that a
-random-walk kernel could not. The pointwise log-likelihood is left \code{NULL} for
-\code{\link[=assemble_loglik]{assemble_loglik()}} to compute as the per-observation integrated predictive
-(F3). If the pass carries no supported random intercept, returns a lens-scope
-\code{\link[=abstention]{abstention()}} rather than a wrong fit (I1).
+\code{\link[=fb_fit]{fb_fit()}} of \verb{(beta, sigma, tau)} draws. For the Poisson marginal --- whose
+variance-component funnel a single static-metric kernel cannot traverse --- a
+funnel-safe blocked sampler is used: \verb{log tau} is slice-sampled, and the
+coefficients are slice-sampled along their \code{tau}-resolved principal axes (a
+Gibbs block that needs no step size and cannot stall); the Gaussian and
+binomial marginals keep the joint NUTS kernel. The pointwise log-likelihood is
+left \code{NULL} for \code{\link[=assemble_loglik]{assemble_loglik()}} to compute as the per-observation
+integrated predictive (F3). If the pass carries no supported random intercept,
+returns a lens-scope \code{\link[=abstention]{abstention()}} rather than a wrong fit (I1).
 }
 \examples{
 \donttest{

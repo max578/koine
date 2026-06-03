@@ -193,27 +193,30 @@ koine_stage1_registry <- function() {
     ),
     lens_spec(
       id = "glmm_marginal",
-      label = "Marginal mixed model (Hamiltonian NUTS, RE integrated out)",
+      label = "Marginal mixed model (NUTS / blocked slice, RE integrated out)",
       tier = 1L, independence_key = list(family = "hamiltonian",
                                          kernel = "glmm-marginal-quadrature"),
       role = "opinion", exactness = "approximate",
       maturity_tier = "koine-implemented-validated",
-      # Validated (SBC + concordance) for gaussian + binomial, which the
-      # Hamiltonian kernel samples cleanly (well-mixed, near-zero divergences).
-      # Poisson is NOT enrolled: the NUTS kernel fixes the count-INTERCEPT mixing
-      # the random walk could not (the original SBC failure), but a minority of
-      # prior-plausible datasets with a large random-intercept SD (tau > 2) give
-      # the marginal a variance-component FUNNEL that a static-metric NUTS cannot
-      # traverse cheaply -- ~5-10% divergences and order-minutes fits, neither
-      # production-viable nor calibration-safe. Marginalising the random effects
-      # rules out the usual non-centred fix, so the recorded next step is a
-      # funnel-robust metric (Riemannian / Fisher-SoftAbs, reusing the AGHQ
-      # information) or a bounded enrolled-tau range. Gaussian + binomial are
-      # unaffected.
-      family_support = function(fs) fs$name %in% c("gaussian", "binomial"),
+      # Validated (SBC + concordance vs NIMBLE) for gaussian, binomial, AND poisson.
+      # Gaussian + binomial ride the joint NUTS kernel (well-mixed, near-zero
+      # divergences). Poisson rides a funnel-safe BLOCKED slice kernel (slice
+      # log tau; slice the coefficients along their tau-resolved Laplace principal
+      # axes) -- a static-metric NUTS funnels on the marginalised variance
+      # component (~50% divergences, ess_tau ~ 3). At a large random-intercept SD
+      # (tau beyond ~2, the ~8% upper tail of the prior) the marginalised funnel is
+      # too weakly identified for ANY marginal sampler to mix (with b integrated
+      # out, the non-centred remedy is unavailable); the fit then under-mixes and a
+      # post-fit convergence gate makes the lens ABSTAIN (convergence_failed)
+      # rather than contribute a badly-mixed opinion. koine thus contributes a
+      # calibrated Poisson opinion where the variance component is identifiable
+      # (SBC clean over the contributing 71/80 sims: all params p > 0.16) and
+      # abstains where it is not -- a first-class honest outcome (SS3).
+      family_support = function(fs) fs$name %in%
+        c("gaussian", "binomial", "poisson"),
       feature_support = .feat_re_intercept, emits_loglik = FALSE,
       fit_fn = fit_glmm_marginal, implemented = TRUE,
-      validation_ref = "r-package/2026-05-31-koine-re-lens-sbc-validation"
+      validation_ref = "r-package/2026-06-03-koine-poisson-glmm-enrolment"
     ),
     lens_spec(
       id = "nimble_glmm",
@@ -222,9 +225,12 @@ koine_stage1_registry <- function() {
                                          kernel = "nimble-mwg-glmm"),
       role = "opinion", exactness = "exact",
       maturity_tier = "reference-validated",
-      # Gaussian + binomial --- matching the enrolled marginal lens (Poisson is
-      # held; see the glmm_marginal record).
-      family_support = function(fs) fs$name %in% c("gaussian", "binomial"),
+      # Gaussian + binomial + poisson --- matching the enrolled marginal lens. The
+      # NIMBLE lens samples the random effects (Gibbs), so it is unaffected by the
+      # marginalised Poisson funnel and is the independent concordance reference
+      # for the marginal lens's blocked kernel.
+      family_support = function(fs) fs$name %in%
+        c("gaussian", "binomial", "poisson"),
       feature_support = .feat_re_intercept, emits_loglik = FALSE,
       fit_fn = fit_nimble_glmm, implemented = TRUE
     ),

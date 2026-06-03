@@ -123,14 +123,24 @@ run_re_validation_study <- function(out_dir = NULL, n_sims = 120L,
                                     conc_tol = 0.5,
                                     families = c("gaussian", "binomial",
                                                  "poisson"),
+                                    fit_control = list(n_iter = 4000L,
+                                                       n_burn = 2000L,
+                                                       n_chains = 3L),
                                     nu_grid = c(3, 8), verbose = TRUE) {
+  # The Poisson marginal rides the funnel-safe blocked double-slice kernel and
+  # ABSTAINS (convergence-gated) on the unmixable large-tau tail, so its recorded
+  # study (`sbc_glmm_marginal_poisson.rds`) is over the CONTRIBUTING sims and runs
+  # at lighter settings than the heavy default (the gate fits the tail fully
+  # before abstaining, so the full grid at 4000x3 is hours): regenerate it with
+  # e.g. `fit_control = list(n_iter = 1200L, n_burn = 600L, n_chains = 2L)`,
+  # `n_sims = 80L`, `n_keep = 50L`, `n_conc = 3L`.
   if (is.null(out_dir)) {
     out_dir <- system.file("validation", package = "koine")
     if (!nzchar(out_dir)) out_dir <- file.path("inst", "validation")
   }
   res_dir <- file.path(out_dir, "results")
   dir.create(res_dir, showWarnings = FALSE, recursive = TRUE)
-  ctrl <- list(n_iter = 4000L, n_burn = 2000L, n_chains = 3L)
+  ctrl <- fit_control
   have_nimble <- requireNamespace("nimble", quietly = TRUE)
 
   # Cross-implementation concordance: do the marginal (quadrature) and NIMBLE

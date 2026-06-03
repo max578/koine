@@ -195,7 +195,7 @@ fit_dram <- function(pass, lens_spec = NULL, n_iter = 4000L, n_burn = 2000L,
     independence_key = lens_spec$independence_key,
     role = lens_spec$role, exactness = lens_spec$exactness,
     structure_variant = isTRUE(lens_spec$structure_variant),
-    lib_versions = list(koine = "0.1.1"),
+    lib_versions = list(koine = "0.2.0"),
     trace = list(fit = "dram completed")
   )
   fb_fit(draws = draws, provenance = prov, exactness = lens_spec$exactness,

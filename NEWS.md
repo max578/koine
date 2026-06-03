@@ -1,3 +1,30 @@
+# koine 0.2.0
+
+* **The Poisson GLMM (single random intercept, log link) is now ENROLLED** for the
+  marginal mixed-model lens (`fit_glmm_marginal`) and the NIMBLE reference lens
+  (`fit_nimble_glmm`), validated by simulation-based calibration (SBC clean over
+  the contributing simulations: every parameter's rank uniform, p > 0.16) and
+  cross-engine concordance against NIMBLE (median standardised discrepancy 0.23,
+  SD ratios 0.94--1.17) on the identifiable-variance-component regime.
+* The Poisson marginal is sampled by a funnel-safe **blocked slice kernel**:
+  `log tau` is slice-sampled, and the coefficients are slice-sampled along their
+  `tau`-resolved principal axes (the scaled eigenvectors of the Laplace
+  covariance of the coefficient conditional). This clears the variance-component
+  funnel neck where a
+  static-metric Hamiltonian kernel funnels (~50% divergences, `ess_tau` ~ 3) and a
+  Laplace independence proposal freezes; the Gaussian and binomial marginals keep
+  the joint NUTS kernel. A value-only marginal log-posterior
+  (`.glmm_marginal_logpost_value`) backs the slice kernel (it skips the score-
+  identity gradient quadrature the slice never uses).
+* At a large random-intercept SD (`tau` beyond ~2, the ~8% upper tail of the
+  prior) the marginalised funnel is too weakly identified for any marginal sampler
+  to mix --- with the random effects integrated out, the non-centred remedy is
+  unavailable. A **post-fit convergence gate** makes the lens ABSTAIN
+  (`convergence_failed`, a new first-class abstention reason --- too few effective
+  draws or chains that disagree) rather than contribute a badly-mixed opinion.
+  koine contributes a calibrated Poisson opinion where the variance component is
+  identifiable, and abstains where it is not (a first-class honest outcome, SS3).
+
 # koine 0.1.1
 
 * `koine_opinion_draws()` now mixes each parameter only over the lenses for which

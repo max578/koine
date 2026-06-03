@@ -68,6 +68,109 @@ test_that("glmm_marginal fits a Poisson GLMM with a well-mixed intercept", {
   expect_gt(s$ess_bulk[s$variable == "b_(Intercept)"], 800)
 })
 
+test_that("the Poisson marginal rides the blocked slice-within-NUTS kernel", {
+  d <- data.frame(y = rpois(60, 2), x = rnorm(60), g = factor(rep(1:10, 6)))
+  pass <- koine_pass(y ~ x + (1 | g), d, poisson(), seed = 1L)
+  fit <- fit_glmm_marginal(pass, n_iter = 400L, n_burn = 200L, n_chains = 1L)
+  # Poisson uses the funnel-safe blocked kernel; the Gaussian/binomial marginals
+  # keep the joint NUTS (asserted by the trace tag).
+  expect_match(fit$provenance$trace$fit, "blocked-slice")
+  dpass <- koine_pass(y ~ x + (1 | g),
+                      data.frame(y = rnorm(60), x = rnorm(60),
+                                 g = factor(rep(1:10, 6))),
+                      gaussian(), seed = 1L)
+  dfit <- fit_glmm_marginal(dpass, n_iter = 400L, n_burn = 200L, n_chains = 1L)
+  expect_match(dfit$provenance$trace$fit, "glmm_marginal/NUTS")
+  expect_no_match(dfit$provenance$trace$fit, "blocked")
+})
+
+test_that("the value-only marginal log-posterior matches the value+gradient path", {
+  # the blocked slice kernel rides a value-only marginal (skipping the score-
+  # identity gradient quadrature); it must equal the value the gradient path
+  # returns, or the slice would target a different density.
+  for (fam in c("gaussian", "binomial", "poisson")) {
+    set.seed(match(fam, c("gaussian", "binomial", "poisson")))
+    g <- rep(1:12, each = 6)
+    x <- rnorm(72)
+    b <- rnorm(12, 0, 0.9)
+    y <- switch(fam,
+                gaussian = 0.4 + 0.5 * x + b[g] + rnorm(72, 0, 0.8),
+                binomial = rbinom(72, 1, plogis(0.2 + 0.6 * x + b[g])),
+                poisson  = rpois(72, exp(0.2 + 0.4 * x + b[g])))
+    d <- data.frame(y = y, x = x, g = factor(g))
+    pass <- koine_pass(y ~ x + (1 | g), d,
+                       get(fam, mode = "function")(), seed = 5L)
+    design <- koine:::.pass_design(pass)
+    redesign <- koine:::.pass_re_design(pass)
+    lay <- koine:::.glmm_marginal_layout(pass, design$K)
+    gh <- koine:::.gh_rule(20L)
+    prior <- koine:::.re_prior(fam)
+    rep_pos <- if (fam == "poisson") match("(Intercept)", colnames(design$X)) else 0L
+    theta <- numeric(lay$dim)
+    theta[lay$coef_idx] <- c(0.3, 0.5)
+    if (lay$has_sigma) theta[lay$sigma_idx] <- log(0.8)
+    theta[lay$tau_idx] <- log(0.9)
+    v_grad <- koine:::.glmm_marginal_logpost_grad(
+      theta, design, redesign, pass, lay, gh, prior, rep_pos)$value
+    v_only <- koine:::.glmm_marginal_logpost_value(
+      theta, design, redesign, pass, lay, gh, prior, rep_pos)
+    expect_equal(v_only, v_grad, tolerance = 1e-9)
+  }
+})
+
+test_that("the tau-adaptive knot axes span a positive-definite covariance", {
+  set.seed(8)
+  g <- rep(1:15, each = 6)
+  x <- rnorm(90)
+  b <- rnorm(15, 0, 1.5)
+  y <- rpois(90, exp(0.3 + 0.4 * x + b[g]))
+  d <- data.frame(y = y, x = x, g = factor(g))
+  pass <- koine_pass(y ~ x + (1 | g), d, poisson(), seed = 3L)
+  design <- koine:::.pass_design(pass)
+  redesign <- koine:::.pass_re_design(pass)
+  lay <- koine:::.glmm_marginal_layout(pass, design$K)
+  gh <- koine:::.gh_rule(20L)
+  prior <- koine:::.re_prior("poisson")
+  rep_pos <- match("(Intercept)", colnames(design$X))
+  lpg <- function(th) koine:::.glmm_marginal_logpost_grad(
+    th, design, redesign, pass, lay, gh, prior, rep_pos)
+  knots <- koine:::.glmm_build_tau_knots(lpg, lay, c(log(mean(y)), 0))
+  # the scaled principal axes (columns of `axes`) span a symmetric positive-
+  # definite conditional covariance (axes axes' = cov), tau-resolved: a larger tau
+  # gives the weakly-identified intercept a larger conditional variance.
+  cov_of <- function(ax) tcrossprod(ax)
+  for (ax in knots$axes) {
+    cv <- cov_of(ax)
+    expect_true(isSymmetric(cv, tol = 1e-6))
+    expect_true(all(eigen(cv, symmetric = TRUE)$values > 0))
+  }
+  v_small <- cov_of(knots$axes[[1L]])[1L, 1L]              # small-tau knot
+  v_large <- cov_of(knots$axes[[length(knots$axes)]])[1L, 1L]
+  expect_gt(v_large, v_small)                             # intercept variance grows in tau
+})
+
+test_that("the blocked kernel keeps a funnel-prone Poisson fit calibrated", {
+  # a moderately large random-intercept SD (the funnel-prone regime that broke the
+  # joint static-metric kernel: ~50% divergences, ess_tau ~ 3, and an independence
+  # proposal froze at zero acceptance). The double-slice blocked kernel must mix
+  # the variance component (a non-trivial effective sample size) and recover the
+  # coefficient. Modest iterations keep the guard affordable.
+  set.seed(2026)
+  g <- rep(1:15, each = 6)
+  x <- rnorm(90)
+  b <- rnorm(15, 0, 1.4)
+  y <- rpois(90, exp(0.3 + 0.5 * x + b[g]))
+  d <- data.frame(y = y, x = x, g = factor(g))
+  pass <- koine_pass(y ~ x + (1 | g), d, poisson(), seed = 11L)
+  fit <- fit_glmm_marginal(pass, n_iter = 1000L, n_burn = 500L, n_chains = 2L)
+  expect_identical(fit$status, "contributed")
+  s <- posterior::summarise_draws(fit$draws, "mean", ess_bulk = posterior::ess_bulk)
+  m <- stats::setNames(s$mean, s$variable)
+  ess_tau <- s$ess_bulk[s$variable == "tau"]
+  expect_gt(ess_tau, 20)                            # was ~3 for the failing kernels
+  expect_equal(unname(m["b_x"]), 0.5, tolerance = 0.35)
+})
+
 test_that("glmm_marginal abstains on a population pass (lens scope)", {
   d <- data.frame(y = rnorm(30), x = rnorm(30))
   fit <- fit_glmm_marginal(koine_pass(y ~ x, d, gaussian()))

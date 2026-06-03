@@ -78,12 +78,15 @@ test_that("synthesise + koine_opinion_draws flow through an array-built pass", {
                unname(mf[c("b_(Intercept)", "b_z")]), tolerance = 0.05)
 })
 
-test_that("an array-built out-of-corner model abstains, never mis-fits", {
-  # Poisson random-intercept is held (no enrolled lens) -> honest abstention
+test_that("an array-built Poisson random-intercept model contributes (enrolled)", {
+  # Poisson random-intercept is now enrolled (the funnel-safe blocked kernel +
+  # convergence-gated abstention); on an identifiable model the enrolment reaches
+  # through the array builder and synthesises an opinion rather than abstaining
+  # (it abstained here only while Poisson was held).
   set.seed(6)
   g <- factor(rep(1:10, 6))
   x <- cbind(`(Intercept)` = 1, w = rnorm(60))
   y <- rpois(60, exp(0.3 + 0.2 * x[, "w"]))
   res <- synthesise(koine_pass_from_design(x, y, poisson(), group = g))
-  expect_true(is_abstention(res))
+  expect_false(is_abstention(res))
 })
