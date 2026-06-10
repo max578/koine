@@ -1,3 +1,12 @@
+# koine (development version)
+
+* The closed abstention taxonomy gained two fact-grounding reasons,
+  `data_ungrounded` and `provenance_unverified` (Independent Oracle Principle).
+  A converged, high-ESS lens fit on an un-grounded input still carries that
+  input's un-groundedness; these let a lens decline on a *fact* failure
+  (an input tagged `[unverified]` per the orchestra provenance vocabulary), not
+  only on the existing numerical failures (convergence, calibration, ESS).
+
 # koine 0.2.0
 
 * **The Poisson GLMM (single random intercept, log link) is now ENROLLED** for the

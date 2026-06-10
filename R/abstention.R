@@ -18,7 +18,14 @@
   "resource_exceeded",    # time / memory / tier budget
   "validation_gate",      # a koine-first lens not yet validated
   "weight_degenerate",    # stacking collapsed to one component (diversity lost)
-  "convergence_failed"    # a lens's sampler did not converge (poor ess / rhat)
+  "convergence_failed",   # a lens's sampler did not converge (poor ess / rhat)
+  # Independent Oracle Principle (FX-11): abstain on a FACT failure, not only a
+  # numerical one. A converged, high-ESS lens fit on an un-grounded input still
+  # carries that input's un-groundedness; these let a lens decline when its
+  # inputs are not grounded against an external authority (orchestra provenance
+  # vocabulary token "[unverified]").
+  "data_ungrounded",      # an input data fact is un-grounded ([unverified])
+  "provenance_unverified" # upstream provenance could not be verified
 )
 
 #' Construct a structured abstention
