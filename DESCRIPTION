@@ -1,6 +1,6 @@
 Package: koine
 Title: Synthesised Fourth Opinion for Bayesian Triangulation
-Version: 0.2.0
+Version: 0.3.0
 Authors@R: person(
     given = "Max",
     family = "Moldovan",
@@ -36,6 +36,7 @@ Suggests:
     bayesreg,
     bridgesampling,
     knitr,
+    lme4,
     ncdf4,
     nimble,
     rmarkdown,

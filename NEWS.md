@@ -1,11 +1,54 @@
-# koine (development version)
+# koine 0.3.0
+
+## New features
+
+* **The breeder-standard multi-environment-trial (MET) random-effects structure
+  is now supported**: two crossed or nested random *intercepts*, a variety effect
+  and a trial (environment) effect, `(1 | variety) + (1 | trial)`. koine now
+  corroborates a production MET model *directly* --- on the variety-plus-trial
+  structure the production model actually fits --- rather than on a
+  single-random-effect reduction that discards the trial structure. Whether the
+  two groupings are crossed or nested is resolved from the data, never from the
+  formula.
+* The MET marginal stays **exact for the Gaussian LMM**: with two crossed
+  groupings the marginal covariance is dense, so the single-random-intercept
+  per-group quadrature no longer applies, but the marginal is still the exact
+  multivariate normal `y ~ N(X beta, sigma^2 I + tau_variety^2 Z_variety
+  Z_variety' + tau_trial^2 Z_trial Z_trial')`. `fit_glmm_marginal()` samples
+  `(beta, sigma, tau_variety, tau_trial)` on that exact marginal (a dense
+  Cholesky of `V`) with a coordinate-wise slice kernel, integrating the random
+  effects out where the sealed engines sample or Laplace-approximate them. The
+  exact marginal log-likelihood was validated to machine precision against an
+  independent `lme4` ML fit (the Independent Oracle Principle), and the MET fit
+  concords with the NIMBLE MET reference (which *samples* the two crossed random
+  effects). The draws now carry one `tau_<grouping>` per random factor.
+* The lift is **additive**. The single-random-intercept path `(1 | g)` is
+  unchanged (byte-identical code path and accessors); the MET structure is the
+  new capability, dispatched only when two groupings are present. No exported
+  function gained or changed a required argument, so the public API and the
+  C1/C3 triangulation contract hold. `koine_pass_from_design()` gained a `groups`
+  argument (a named list of two grouping vectors) alongside the existing `group`.
+* A non-Gaussian MET --- whose dense crossed-GLMM marginal has no exact
+  quadrature --- returns a lens-scope abstention (`feature_unsupported`) rather
+  than an ungrounded approximation; the single-random-intercept GLMM path
+  (Gaussian, binomial, Poisson) is untouched. The heavy-tailed single-RE lens
+  (`fit_glmm_robust_re()`) is excluded from a MET pass with a recorded reason
+  rather than dropping the second grouping.
+
+## Minor improvements and fixes
 
 * The closed abstention taxonomy gained two fact-grounding reasons,
   `data_ungrounded` and `provenance_unverified` (Independent Oracle Principle).
-  A converged, high-ESS lens fit on an un-grounded input still carries that
-  input's un-groundedness; these let a lens decline on a *fact* failure
+  A converged, high-ESS lens fit on an ungrounded input still carries that
+  input's ungroundedness; these let a lens decline on a *fact* failure
   (an input tagged `[unverified]` per the orchestra provenance vocabulary), not
   only on the existing numerical failures (convergence, calibration, ESS).
+* **Fixed a latent NIMBLE compile failure for an intercept-only fixed part**
+  (`K = 1`). NIMBLE's `inprod()` over a length-1 vector generates non-compiling
+  Eigen C++, so the NIMBLE GLMM lenses now write the `K = 1` fixed-effects mean
+  as the scalar `beta[1]` and keep `inprod()` for `K >= 2`. The bug never fired
+  before because every test used a `K = 2` fixed part; the MET model (a commonly
+  intercept-only fixed part) surfaced it.
 
 # koine 0.2.0
 

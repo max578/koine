@@ -31,6 +31,17 @@ reference:
   - fit_ridge
   - fit_lasso
   - fit_horseshoe
+- title: Mixed-model lenses
+  desc: >-
+    Random-effects lenses --- a single random intercept and the breeder-standard
+    multi-environment-trial (MET) structure of two crossed/nested intercepts.
+    The marginal lens integrates the random effects out; the NIMBLE lens samples
+    them; the robust-RE lens gives them heavy tails.
+  contents:
+  - fit_glmm_marginal
+  - fit_nimble_glmm
+  - fit_glmm_robust_re
+  - koine_pass_from_design
 - title: Synthesis and gate
   contents:
   - synthesise
