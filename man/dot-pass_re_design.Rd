@@ -2,7 +2,7 @@
 % Please edit documentation in R/pass.R
 \name{.pass_re_design}
 \alias{.pass_re_design}
-\title{Random-effects design for a pass (single random-intercept grouping)}
+\title{Random-effects design for a pass (single or MET random intercepts)}
 \usage{
 .pass_re_design(pass)
 }
@@ -10,12 +10,20 @@
 \item{pass}{A \code{koine_pass}.}
 }
 \value{
-A list with \code{grouping}, \code{group} (integer index), \code{levels}, and
-\code{n_groups}, or \code{NULL} when the pass has no random effect.
+A list as described above, or \code{NULL} when the pass has no random
+effect.
 }
 \description{
-Returns the per-observation group index and group count for the grouping
-factor of the random intercept. \code{NULL} for a population pass. Used by the
-RE lenses (the per-group marginal likelihood) and the integrated predictive.
+Returns the per-observation group index/indices and group counts for the
+grouping factor(s) of the random intercept(s). \code{NULL} for a population pass.
+Used by the RE lenses (the marginal likelihood) and the integrated predictive.
+}
+\details{
+For the single random-intercept case the returned list carries the legacy
+fields \code{grouping}, \code{group}, \code{levels}, and \code{n_groups} directly (so the existing
+single-RE code path is byte-identical). It always also carries \code{factors}, a
+per-grouping list of \code{list(grouping, group, levels, n_groups)}, the \code{structure}
+(\code{"single"} / \code{"crossed"} / \code{"nested"}), and the grouping names --- the surface
+the MET marginal core reads.
 }
 \keyword{internal}

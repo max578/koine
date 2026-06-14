@@ -39,7 +39,8 @@ lens_spec(
 
 \item{family_support}{Predicate \code{(family_spec) -> logical}.}
 
-\item{feature_support}{A \code{list(random_effects, distributional, nonlinear)}.}
+\item{feature_support}{A \code{list(random_effects, distributional, nonlinear, met)}. \code{met} (default \code{FALSE}) flags a mixed-model lens that also covers the
+MET structure of two crossed/nested random intercepts.}
 
 \item{emits_loglik}{\code{TRUE} if the lens emits a pointwise log-likelihood
 natively; \code{FALSE} means koine computes it via the family spec.}
@@ -76,6 +77,6 @@ lens_spec(
   maturity_tier = "reference-validated",
   family_support = function(fs) fs$name == "gaussian",
   feature_support = list(random_effects = FALSE, distributional = FALSE,
-                         nonlinear = FALSE),
+                         nonlinear = FALSE, met = FALSE),
   emits_loglik = FALSE)
 }

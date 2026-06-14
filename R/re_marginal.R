@@ -354,3 +354,102 @@
   }, numeric(ng))
   sum(.row_log_sum_exp(matrix(per_group, nrow = ng)))
 }
+
+## ----------------------------------------------------------------------------
+## MET (multi-environment-trial) crossed / nested random intercepts (Stage-3)
+##
+## The breeder-standard MET model has TWO random intercepts --- a variety effect
+## and a trial (environment) effect: eta_i = x_i' beta + u_{variety(i)} +
+## v_{trial(i)}, with u ~ N(0, tau_u^2) and v ~ N(0, tau_v^2). With two CROSSED
+## groupings the marginal likelihood does NOT factor into independent per-group
+## integrals (every observation links a variety to a trial through a bipartite
+## graph, so the marginal covariance is dense): the single-random-intercept
+## per-group quadrature does not apply.
+##
+## For the Gaussian LMM the marginal is still exact and analytic --- a structured
+## multivariate normal y ~ N(eta_fixed, V) with
+##   V = sigma^2 I + tau_u^2 Z_u Z_u' + tau_v^2 Z_v Z_v',
+## the random-effect design matrices Z_r being the level-indicator matrices. This
+## is exactly the production MET model that REML (sommer) and a sampler
+## (flexyBayes) fit, so koine corroborates it DIRECTLY rather than on a
+## single-random-effect reduction. koine's distinguishing identity holds: it
+## integrates the random effects out exactly (a dense Cholesky of V) where the
+## sealed engines sample (NIMBLE) or Laplace-approximate (INLA) them.
+##
+## n (the number of observations) is modest for a MET fit --- a few varieties by a
+## few dozen trials --- so the dense O(n^3) Cholesky per evaluation is cheap. A
+## non-Gaussian MET (the dense GLMM marginal) has no analytic shortcut and no
+## cheap exact quadrature; the lens abstains there (feature_unsupported), never
+## pretending to an approximation it cannot validate (I1).
+## ----------------------------------------------------------------------------
+
+# Sparse-free level-indicator (one-hot) design Z_r for a grouping factor: an
+# N x n_groups 0/1 matrix with a single 1 per row at the observation's group.
+.re_indicator <- function(group_int, n_groups) {
+  z <- matrix(0, nrow = length(group_int), ncol = n_groups)
+  z[cbind(seq_along(group_int), group_int)] <- 1
+  z
+}
+
+# The marginal covariance V = sigma^2 I + sum_r tau_r^2 Z_r Z_r' for a set of
+# crossed/nested random intercepts. `factors` is the per-grouping list from
+# `.build_re_design()`; `taus` is the matching vector of random-intercept SDs.
+.re_marginal_cov <- function(n, factors, taus, sigma) {
+  v <- diag(sigma^2, n)
+  for (r in seq_along(factors)) {
+    z <- .re_indicator(factors[[r]]$group, factors[[r]]$n_groups)
+    v <- v + taus[r]^2 * tcrossprod(z)
+  }
+  v
+}
+
+#' Exact marginal log-likelihood of a crossed/nested Gaussian MET model (Stage-3)
+#'
+#' Computes `log N(y | eta_fixed, V)` with the structured dense marginal
+#' covariance `V = sigma^2 I + sum_r tau_r^2 Z_r Z_r'`, via a Cholesky of `V`.
+#' This is the exact marginal of a Gaussian linear mixed model with one or more
+#' crossed (or nested) random intercepts --- the random effects integrated out,
+#' not sampled.
+#'
+#' @param y Response vector (length `N`).
+#' @param eta_fixed Fixed-part linear predictor (length `N`).
+#' @param factors The per-grouping list from `.build_re_design()` (each carries
+#'   the integer group index and the group count).
+#' @param taus Vector of random-intercept SDs, one per grouping (`>= 0`).
+#' @param sigma Residual SD (`> 0`).
+#' @return A scalar log marginal likelihood (`-Inf` if `V` is not
+#'   positive-definite under the proposed variance components).
+#' @keywords internal
+.re_marginal_gaussian_met <- function(y, eta_fixed, factors, taus, sigma) {
+  n <- length(y)
+  v <- .re_marginal_cov(n, factors, taus, sigma)
+  ch <- tryCatch(chol(v), error = function(e) NULL)
+  if (is.null(ch)) {
+    return(-Inf)
+  }
+  r <- y - eta_fixed
+  # log|V| = 2 sum log(diag(R)); r' V^-1 r = ||R^-T r||^2 via the Cholesky solve.
+  log_det <- 2 * sum(log(diag(ch)))
+  z <- backsolve(ch, r, transpose = TRUE)
+  quad <- sum(z^2)
+  -0.5 * (n * log(2 * pi) + log_det + quad)
+}
+
+#' Per-observation integrated predictive for a crossed/nested Gaussian MET model
+#'
+#' For a *new* observation the random effect of every grouping is drawn afresh
+#' and marginalised, so the honest predictive is
+#' `N(y_i | eta_fixed_i, sigma^2 + sum_r tau_r^2)` --- the same held-out target
+#' every MET lens is stacked on, keeping the leave-one-out PSIS gate in its
+#' reliable regime (the analogue of the single-RE integrated predictive).
+#'
+#' @param y Response vector (length `N`).
+#' @param eta_fixed Fixed-part linear predictor (length `N`).
+#' @param taus Vector of random-intercept SDs (one per grouping).
+#' @param sigma Residual SD.
+#' @return A length-`N` vector of integrated pointwise log-likelihoods.
+#' @keywords internal
+.re_integrated_loglik_met <- function(y, eta_fixed, taus, sigma) {
+  sd_marg <- sqrt(sigma^2 + sum(taus^2))
+  stats::dnorm(y, mean = eta_fixed, sd = sd_marg, log = TRUE)
+}

@@ -21,7 +21,9 @@
 #' @param exactness `"exact"`, `"approximate"`, or `"resampled"`.
 #' @param maturity_tier One of the maturity tiers (Stage-0 SS11).
 #' @param family_support Predicate `(family_spec) -> logical`.
-#' @param feature_support A `list(random_effects, distributional, nonlinear)`.
+#' @param feature_support A `list(random_effects, distributional, nonlinear,
+#'   met)`. `met` (default `FALSE`) flags a mixed-model lens that also covers the
+#'   MET structure of two crossed/nested random intercepts.
 #' @param emits_loglik `TRUE` if the lens emits a pointwise log-likelihood
 #'   natively; `FALSE` means koine computes it via the family spec.
 #' @param fit_fn The adapter `function(pass, lens_spec) -> koine_fb_fit`, or
@@ -46,7 +48,7 @@
 #'   maturity_tier = "reference-validated",
 #'   family_support = function(fs) fs$name == "gaussian",
 #'   feature_support = list(random_effects = FALSE, distributional = FALSE,
-#'                          nonlinear = FALSE),
+#'                          nonlinear = FALSE, met = FALSE),
 #'   emits_loglik = FALSE)
 #' @export
 lens_spec <- function(id, label, tier, independence_key, role, exactness,
@@ -69,11 +71,17 @@ lens_spec <- function(id, label, tier, independence_key, role, exactness,
 
 # Feature support for a plain population-level GLM lens (no RE / dist / nonlin).
 .feat_glm_only <- list(random_effects = FALSE, distributional = FALSE,
-                       nonlinear = FALSE)
+                       nonlinear = FALSE, met = FALSE)
 
-# Feature support for a mixed-model lens (single random intercept).
+# Feature support for a mixed-model lens with a single random intercept only
+# (no MET). The robust-RE lens is the single-RE-only case.
 .feat_re_intercept <- list(random_effects = TRUE, distributional = FALSE,
-                           nonlinear = FALSE)
+                           nonlinear = FALSE, met = FALSE)
+
+# Feature support for a mixed-model lens that also covers the MET structure of
+# two crossed/nested random intercepts (the marginal and NIMBLE lenses).
+.feat_re_met <- list(random_effects = TRUE, distributional = FALSE,
+                     nonlinear = FALSE, met = TRUE)
 
 # A heavy-tailed random-effect lens spec at a given Student-t df. The enrolled
 # battery is a grid over `nu` (a tail-weight spectrum, like the shrinkage
@@ -214,7 +222,7 @@ koine_stage1_registry <- function() {
       # abstains where it is not -- a first-class honest outcome (SS3).
       family_support = function(fs) fs$name %in%
         c("gaussian", "binomial", "poisson"),
-      feature_support = .feat_re_intercept, emits_loglik = FALSE,
+      feature_support = .feat_re_met, emits_loglik = FALSE,
       fit_fn = fit_glmm_marginal, implemented = TRUE,
       validation_ref = "r-package/2026-06-03-koine-poisson-glmm-enrolment"
     ),
@@ -231,7 +239,7 @@ koine_stage1_registry <- function() {
       # for the marginal lens's blocked kernel.
       family_support = function(fs) fs$name %in%
         c("gaussian", "binomial", "poisson"),
-      feature_support = .feat_re_intercept, emits_loglik = FALSE,
+      feature_support = .feat_re_met, emits_loglik = FALSE,
       fit_fn = fit_nimble_glmm, implemented = TRUE
     ),
     .robust_re_lens_spec(3),
@@ -310,10 +318,20 @@ resolve_battery <- function(pass, registry = koine_stage1_registry()) {
     } else if (isTRUE(pass$has_re) &&
                  isTRUE(L$feature_support$random_effects) &&
                  !isTRUE(pass$re_supported)) {
-      # The random-effects structure (random slopes, multiple or crossed/nested
-      # groupings) is outside this build's single-random-intercept support.
-      reason <- paste0("feature_unsupported: only a single random intercept ",
-                       "on one grouping factor is supported")
+      # The random-effects structure (random slopes, correlated effects, or more
+      # than two groupings) is outside this build's supported intercept structure.
+      reason <- paste0("feature_unsupported: only a single random intercept, ",
+                       "or the MET structure of two crossed/nested intercepts, ",
+                       "is supported")
+    } else if (isTRUE(pass$has_re) &&
+                 isTRUE(L$feature_support$random_effects) &&
+                 identical(pass$re_structure, "met") &&
+                 !isTRUE(L$feature_support$met)) {
+      # A single-random-intercept-only lens (the heavy-tailed robust-RE lens)
+      # cannot honour the MET structure of two crossed/nested intercepts; it is
+      # excluded with a recorded reason rather than dropping the second grouping.
+      reason <- paste0("feature_unsupported: lens covers a single random ",
+                       "intercept only, not the MET (two-grouping) structure")
     } else if (needs_ll && !L$emits_loglik &&
                  is.null(pass$family$loglik_pointwise)) {
       reason <- "log_likelihood required but not producible"

@@ -376,6 +376,149 @@
   list(draws = keep, divergences = 0L, saturated = 0L)
 }
 
+## ----------------------------------------------------------------------------
+## MET (multi-environment-trial) marginal path --- two crossed/nested random
+## intercepts, Gaussian LMM (Stage-3)
+##
+## The breeder-standard MET model has a variety and a trial random intercept
+## crossed (or nested). With two crossed groupings the marginal covariance is
+## dense (`.re_marginal_gaussian_met`), so the single-random-intercept per-group
+## quadrature does not apply --- but the Gaussian marginal is still exact. koine
+## samples (beta, log sigma, log tau_1, log tau_2) on that exact marginal with a
+## coordinate-wise slice kernel (its own `.slice_1d`, already validated as the
+## variance-component kernel): the well-identified MET posterior is smooth, so a
+## slice needs no tuning and cannot stall, and the target is the EXACT
+## dense-Cholesky marginal --- koine integrates the random effects out where the
+## sealed engines sample or Laplace-approximate them.
+##
+## A non-Gaussian MET (the dense crossed GLMM marginal) has no analytic shortcut
+## and no cheap exact quadrature; the lens abstains there rather than ship an
+## ungrounded approximation (I1).
+## ----------------------------------------------------------------------------
+
+# Unconstrained MET layout: coefficients, log sigma, then one log tau per
+# grouping (variety, trial). Gaussian-only, so log sigma is always present.
+.met_layout <- function(K, n_re) {
+  list(dim = K + 1L + n_re, coef_idx = seq_len(K), sigma_idx = K + 1L,
+       tau_idx = K + 1L + seq_len(n_re), n_re = n_re)
+}
+
+# Value of the exact crossed/nested Gaussian MET marginal log-posterior in the
+# unconstrained space (theta -> scalar): the dense-Cholesky marginal log-
+# likelihood plus the shared weakly-informative priors (the same N(0, 5)
+# coefficient and N(0, 2) log-scale priors the single-RE Gaussian lens uses, so
+# the MET lens's agreement with the engines stays a method signal, not a prior
+# artefact).
+.met_logpost_value <- function(theta, design, factors, prior, lay) {
+  beta <- theta[lay$coef_idx]
+  sigma <- exp(theta[lay$sigma_idx])
+  taus <- exp(theta[lay$tau_idx])
+  eta_fixed <- as.numeric(design$X %*% beta)
+  ll <- .re_marginal_gaussian_met(design$y, eta_fixed, factors, taus, sigma)
+  if (!is.finite(ll)) {
+    return(-Inf)
+  }
+  ll + sum(stats::dnorm(beta, 0, prior$beta_sd, log = TRUE)) +
+    stats::dnorm(theta[lay$sigma_idx], 0, prior$log_sigma_sd, log = TRUE) +
+    sum(stats::dnorm(theta[lay$tau_idx], 0, prior$log_tau_sd, log = TRUE))
+}
+
+# One coordinate-wise slice chain over the MET marginal log-posterior. Each
+# coordinate (every coefficient, log sigma, every log tau) is slice-sampled in
+# turn against the value-only marginal; the sweep needs no step size and cannot
+# stall on the smooth, well-identified MET posterior. Returns the kept draws in
+# the unconstrained layout.
+.met_slice_chain <- function(init, value_fn, lay, n_iter, n_warmup) {
+  theta <- init
+  n_keep <- n_iter - n_warmup
+  keep <- matrix(NA_real_, nrow = n_keep, ncol = lay$dim)
+  along <- function(th, j) function(z) {
+    th[j] <- z
+    value_fn(th)
+  }
+  sweep <- function(th) {
+    for (j in seq_len(lay$dim)) {
+      th[j] <- .slice_1d(along(th, j), th[j], w = 1)
+    }
+    th
+  }
+  for (m in seq_len(n_warmup)) {
+    theta <- sweep(theta)
+  }
+  for (i in seq_len(n_keep)) {
+    theta <- sweep(theta)
+    keep[i, ] <- theta
+  }
+  keep
+}
+
+# Assemble MET slice chains into a draws_array (b_<col>, sigma, tau_<grouping>),
+# back-transforming the log-scale sigma and per-grouping taus.
+.met_to_draws <- function(chains, design, lay, grouping_names) {
+  vnames <- c(paste0("b_", colnames(design$X)), "sigma",
+              paste0("tau_", grouping_names))
+  n_keep <- nrow(chains[[1L]])
+  arr <- array(NA_real_, dim = c(n_keep, length(chains), length(vnames)),
+               dimnames = list(NULL, NULL, vnames))
+  for (c in seq_along(chains)) {
+    m <- chains[[c]]
+    m[, lay$sigma_idx] <- exp(m[, lay$sigma_idx])
+    m[, lay$tau_idx] <- exp(m[, lay$tau_idx, drop = FALSE])
+    arr[, c, ] <- m
+  }
+  posterior::as_draws_array(arr)
+}
+
+# The MET fit branch (two crossed/nested Gaussian random intercepts). Returns a
+# contributed fit, or a lens-scope abstention for a non-Gaussian MET.
+.fit_glmm_marginal_met <- function(pass, lens_spec, redesign, n_iter, n_burn,
+                                   n_chains) {
+  if (!(pass$family$name == "gaussian" && pass$family$link == "identity")) {
+    return(abstention(
+      "feature_unsupported", scope = "lens",
+      detail = paste0("glmm_marginal serves a Gaussian (identity) response for ",
+                      "the MET (two crossed/nested random intercepts) structure;",
+                      " a dense crossed-GLMM marginal has no exact quadrature.")))
+  }
+  design <- .pass_design(pass)
+  factors <- redesign$factors
+  n_re <- length(factors)
+  lay <- .met_layout(design$K, n_re)
+  prior <- .re_prior("gaussian")
+  dseed <- .derived_seed(pass$seed, paste0(lens_spec$id, "_met"))
+  set.seed(dseed)
+
+  start <- tryCatch(stats::coef(stats::lm.fit(design$X, design$y)),
+                    error = function(e) rep.int(0, design$K))
+  start[!is.finite(start)] <- 0
+  value_fn <- function(theta) {
+    .met_logpost_value(theta, design, factors, prior, lay)
+  }
+  chains <- vector("list", n_chains)
+  for (c in seq_len(n_chains)) {
+    init <- numeric(lay$dim)
+    init[lay$coef_idx] <- start + stats::rnorm(design$K, 0, 0.5)
+    init[lay$sigma_idx] <- stats::rnorm(1, 0, 0.5)
+    init[lay$tau_idx] <- stats::rnorm(n_re, 0, 0.5)
+    chains[[c]] <- .met_slice_chain(init, value_fn, lay, n_iter = n_iter,
+                                    n_warmup = n_burn)
+  }
+  draws <- .met_to_draws(chains, design, lay, redesign$groupings)
+  prov <- provenance_record(
+    method = lens_spec$id, method_version = "0.1.0", impl_language = "R",
+    seed = pass$seed, derived_seed = dseed, ir_hash = pass$ir_hash,
+    maturity_tier = lens_spec$maturity_tier,
+    independence_key = lens_spec$independence_key,
+    role = lens_spec$role, exactness = "exact",
+    structure_variant = isTRUE(lens_spec$structure_variant),
+    lib_versions = list(koine = "0.3.0"),
+    trace = list(fit = sprintf(
+      "glmm_marginal/MET-slice completed (%s random intercepts: %s)",
+      redesign$structure, paste(redesign$groupings, collapse = " + "))))
+  fb_fit(draws = draws, provenance = prov, exactness = "exact",
+         sample_stats = NULL, status = "contributed")
+}
+
 #' Fit the marginal mixed-model lens
 #'
 #' Runs the koine-authored No-U-Turn Sampler on the random-effects *marginal*
@@ -386,12 +529,23 @@
 #' funnel-safe blocked sampler is used: `log tau` is slice-sampled, and the
 #' coefficients are slice-sampled along their `tau`-resolved principal axes (a
 #' Gibbs block that needs no step size and cannot stall); the Gaussian and
-#' binomial marginals keep the joint NUTS kernel. The pointwise log-likelihood is
-#' left `NULL` for [assemble_loglik()] to compute as the per-observation
-#' integrated predictive (F3). If the pass carries no supported random intercept,
-#' returns a lens-scope [abstention()] rather than a wrong fit (I1).
+#' binomial marginals keep the joint NUTS kernel.
 #'
-#' @param pass A `koine_pass` carrying a single random intercept `(1 | g)`.
+#' For the breeder-standard multi-environment-trial (MET) structure --- two
+#' crossed or nested random intercepts `(1 | variety) + (1 | trial)` --- the
+#' Gaussian marginal stays exact (a dense Cholesky of `V = sigma^2 I + sum_r
+#' tau_r^2 Z_r Z_r'`) and is sampled by a coordinate-wise slice kernel over
+#' `(beta, sigma, tau_variety, tau_trial)`; the draws then carry one
+#' `tau_<grouping>` per random factor. A non-Gaussian MET (a dense crossed-GLMM
+#' marginal, which has no exact quadrature) returns a lens-scope [abstention()].
+#' The pointwise log-likelihood is left `NULL` for [assemble_loglik()] to compute
+#' as the per-observation integrated predictive (F3). If the pass carries no
+#' supported random intercept, returns a lens-scope [abstention()] rather than a
+#' wrong fit (I1).
+#'
+#' @param pass A `koine_pass` carrying a single random intercept `(1 | g)`, or the
+#'   MET structure of two crossed/nested random intercepts
+#'   `(1 | variety) + (1 | trial)`.
 #' @param lens_spec The lens's registry record; defaults to the registry's
 #'   `glmm_marginal` record.
 #' @param n_iter Iterations per chain (including warm-up). The Hamiltonian kernel
@@ -426,10 +580,18 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 1500L,
   if (!isTRUE(pass$has_re) || !isTRUE(pass$re_supported)) {
     return(abstention(
       "feature_unsupported", scope = "lens",
-      detail = "glmm_marginal requires a single supported random intercept."))
+      detail = paste0("glmm_marginal requires a supported random-intercept ",
+                      "structure (a single intercept, or the MET structure of ",
+                      "two crossed/nested intercepts).")))
+  }
+  redesign <- .pass_re_design(pass)
+  # MET branch: two crossed/nested random intercepts. The Gaussian marginal is
+  # exact (dense Cholesky); a non-Gaussian MET abstains in the branch.
+  if (!identical(redesign$structure, "single")) {
+    return(.fit_glmm_marginal_met(pass, lens_spec, redesign, n_iter, n_burn,
+                                  n_chains))
   }
   design <- .pass_design(pass)
-  redesign <- .pass_re_design(pass)
   lay <- .glmm_marginal_layout(pass, design$K)
   gh <- .gh_rule(n_nodes)
   dseed <- .derived_seed(pass$seed, lens_spec$id)

@@ -142,8 +142,83 @@ are outlying --- so koine's mixed-model opinion, like its population battery,
 becomes sensitive to model structure rather than a weighted echo of one
 assumption.
 
+## Multi-environment trials: variety and trial together
+
+The breeder-standard multi-environment-trial (MET) model carries *two* random
+intercepts --- a variety effect and a trial (environment) effect, crossed (each
+variety grown across many trials) or nested. koine fits this structure directly
+with `(1 | variety) + (1 | trial)`, so it corroborates a production MET model on
+the model that model actually fits, not on a single-random-effect reduction that
+discards the trial structure. The Gaussian MET marginal stays exact: the random
+effects are integrated out through a dense Cholesky of `V = sigma^2 I +
+tau_variety^2 Z_variety Z_variety' + tau_trial^2 Z_trial Z_trial'`, where the
+sealed engines instead sample (NIMBLE) or Laplace-approximate (INLA) them.
+
+```{r met}
+set.seed(404)
+nv <- 16L                                          # varieties
+nt <- 8L                                           # trials (environments)
+u <- rnorm(nv, 0, 1.0)                             # variety effects
+v <- rnorm(nt, 0, 2.5)                             # trial effects (dominant)
+rows <- list()
+for (i in seq_len(nv)) {
+  trials_i <- sample(seq_len(nt), 5L)             # an incomplete (unbalanced) MET
+  for (t in trials_i) {
+    rows[[length(rows) + 1L]] <- data.frame(
+      variety = i, trial = t,
+      yield = 5 + u[i] + v[t] + rnorm(1L, 0, 0.6))
+  }
+}
+met <- do.call(rbind, rows)
+met$variety <- factor(met$variety)
+met$trial <- factor(met$trial)
+
+pass_met <- koine_pass(yield ~ 1 + (1 | variety) + (1 | trial), met, gaussian(),
+                       seed = 5L)
+pass_met                                           # tagged [MET], crossed
+fit_met <- fit_glmm_marginal(pass_met, n_iter = 1500L, n_burn = 750L,
+                             n_chains = 2L)
+posterior::summarise_draws(fit_met$draws, "mean")  # b0, sigma, tau_variety, tau_trial
+```
+
+The draws now carry one `tau_<grouping>` per random factor. koine's MET variety
+effects corroborate the production MET model (here `lme4`, fitted by REML)
+faithfully, and far more so than the single-random-intercept reduction --- which,
+on an unbalanced trial with a dominant environment effect, confounds each
+variety with the trials it happened to be grown in.
+
+```{r met-corroborate, eval = requireNamespace("lme4", quietly = TRUE)}
+prod <- lme4::lmer(yield ~ 1 + (1 | variety) + (1 | trial), met, REML = TRUE)
+blup_met <- lme4::ranef(prod)$variety[, 1]
+single <- lme4::lmer(yield ~ 1 + (1 | variety), met, REML = TRUE)
+blup_single <- lme4::ranef(single)$variety[, 1]
+
+# koine MET variety effects (GLS BLUP at the posterior-mean variance components)
+sm <- posterior::summarise_draws(fit_met$draws, "mean")
+mv <- stats::setNames(sm$mean, sm$variable)
+design <- koine:::.pass_design(pass_met)
+red <- koine:::.pass_re_design(pass_met)
+taus <- c(mv["tau_variety"], mv["tau_trial"])
+v_mat <- koine:::.re_marginal_cov(design$N, red$factors, taus, mv["sigma"])
+resid <- design$y - as.numeric(design$X %*% mv[paste0("b_", colnames(design$X))])
+z_var <- koine:::.re_indicator(red$factors[[1L]]$group, red$factors[[1L]]$n_groups)
+u_koine <- as.numeric(taus[1L]^2 * t(z_var) %*% solve(v_mat, resid))
+
+c(koine_MET_vs_production = cor(u_koine, blup_met),
+  single_RE_vs_production = cor(blup_single, blup_met))
+```
+
+A non-Gaussian MET --- whose dense crossed marginal has no exact quadrature ---
+is declined honestly rather than approximated:
+
+```{r met-glmm-abstain}
+counts <- transform(met, n = rpois(nrow(met), 4))
+fit_glmm_marginal(koine_pass(n ~ 1 + (1 | variety) + (1 | trial), counts,
+                             poisson()))$reason
+```
+
 Richer structure is refused rather than fitted as the wrong model: a random
-slope, or more than one grouping factor, makes koine abstain
+slope, or more than two grouping factors, makes koine abstain
 `feature_unsupported`.
 
 ```{r re-abstain}

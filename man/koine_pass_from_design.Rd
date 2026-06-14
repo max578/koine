@@ -9,6 +9,7 @@ koine_pass_from_design(
   y,
   family,
   group = NULL,
+  groups = NULL,
   coef_names = colnames(x),
   response_name = "y",
   grouping_name = "g",
@@ -29,13 +30,20 @@ coefficient names (\verb{b_<col>} in the draws).}
 \item{family}{A base-R \code{family} object or a known family name.}
 
 \item{group}{Optional grouping vector (length \code{nrow(x)}) for a single random
-intercept \code{(1 | group)}; \code{NULL} for a population model.}
+intercept \code{(1 | group)}; \code{NULL} for a population model. For the MET
+structure of two crossed/nested random intercepts pass \code{groups} instead.}
+
+\item{groups}{Optional named list of two grouping vectors (each length
+\code{nrow(x)}) for two crossed/nested random intercepts --- the breeder-standard
+MET structure, e.g. \code{list(variety = ., trial = .)}. The list names become
+the grouping-factor names; mutually exclusive with \code{group}.}
 
 \item{coef_names}{Optional column names for \code{x} (defaults to \code{colnames(x)}).}
 
 \item{response_name}{Name recorded for the response (default \code{"y"}).}
 
-\item{grouping_name}{Name recorded for the grouping factor (default \code{"g"}).}
+\item{grouping_name}{Name recorded for the (single) grouping factor when
+\code{group} is supplied (default \code{"g"}); ignored when \code{groups} is used.}
 
 \item{required_outputs}{Character subset of \code{c("posterior", "log_likelihood", "posterior_predictive", "sample_stats")}.}
 

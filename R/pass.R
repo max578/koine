@@ -9,11 +9,13 @@
 ## ----------------------------------------------------------------------------
 
 # Decompose a model formula into its fixed-effects part and any lme4-style
-# random-effects terms `(lhs | grouping)`. This build supports a single random
-# intercept on a single grouping factor; richer structure (random slopes,
-# multiple or crossed/nested groupings, correlated effects) is parsed and
-# flagged unsupported (`re_supported = FALSE`) so the battery abstains
-# non-silently (I1), never mis-modelling it.
+# random-effects terms `(lhs | grouping)`. This build supports random *intercept*
+# structure --- a single random intercept `(1 | g)` and the breeder-standard
+# multi-environment-trial (MET) structure of two crossed or nested random
+# intercepts `(1 | variety) + (1 | trial)`. Richer structure (random slopes,
+# correlated effects, more than two groupings) is parsed and flagged unsupported
+# (`re_supported = FALSE`) so the battery abstains non-silently (I1), never
+# mis-modelling it.
 .parse_formula_ir <- function(formula) {
   response <- all.vars(formula)[1L]
   rhs <- formula[[length(formula)]]
@@ -44,20 +46,42 @@
          random_intercept = lhs == "1")
   })
   has_re <- length(re_terms) > 0L
-  re_supported <- has_re && length(re_terms) == 1L &&
-    isTRUE(re_terms[[1L]]$random_intercept) &&
-    grepl("^[A-Za-z.][A-Za-z0-9._]*$", re_terms[[1L]]$grouping)
+
+  # Support gate. Every bar must be a plain random intercept on a single
+  # syntactic grouping name; one such bar is the single-RE case, two on distinct
+  # groupings is the MET case (crossed or nested). The (crossed vs nested)
+  # distinction is data-driven and resolved later from the design, never from
+  # the formula --- the formula is identical either way.
+  groupings <- vapply(re_terms, function(t) t$grouping, character(1))
+  all_plain_intercepts <- has_re &&
+    all(vapply(re_terms, function(t) isTRUE(t$random_intercept), logical(1))) &&
+    all(grepl("^[A-Za-z.][A-Za-z0-9._]*$", groupings))
+  n_re <- length(re_terms)
+  re_supported <- all_plain_intercepts && n_re %in% c(1L, 2L) &&
+    !anyDuplicated(groupings)
+  re_structure <- if (!re_supported) {
+    NA_character_
+  } else if (n_re == 1L) {
+    "single"
+  } else {
+    "met"                                          # crossed / nested resolved later
+  }
   list(fixed_formula = fixed_formula, re_terms = re_terms,
-       has_re = has_re, re_supported = re_supported, response = response)
+       has_re = has_re, re_supported = re_supported,
+       re_structure = re_structure, re_groupings = groupings,
+       response = response)
 }
 
 #' Construct a koine `pass`
 #'
-#' @param formula A model formula. Population-level terms, optionally with a
-#'   single `lme4`-style random intercept `(1 | g)` on one grouping factor.
-#'   Richer random-effects structure (random slopes, multiple or crossed/nested
-#'   groupings, correlated effects) is parsed and flagged unsupported so the
-#'   battery abstains non-silently rather than fitting the wrong model.
+#' @param formula A model formula. Population-level terms, optionally with
+#'   `lme4`-style random *intercepts*: a single `(1 | g)`, or the breeder-standard
+#'   multi-environment-trial (MET) structure of two crossed or nested random
+#'   intercepts `(1 | variety) + (1 | trial)`. Richer random-effects structure
+#'   (random slopes, correlated effects, more than two groupings) is parsed and
+#'   flagged unsupported so the battery abstains non-silently rather than fitting
+#'   the wrong model. Whether two groupings are crossed or nested is resolved
+#'   from the data, never from the formula.
 #' @param data A data frame holding every column referenced in `formula`.
 #' @param family A base-R `family` object or a known family name; wrapped into
 #'   an evaluable [family_spec()].
@@ -105,6 +129,7 @@ koine_pass <- function(formula, data, family,
     re_terms = ir$re_terms,
     has_re = ir$has_re,
     re_supported = ir$re_supported,
+    re_structure = ir$re_structure,
     response = response,
     data = data,
     family = fam_spec,
@@ -135,10 +160,16 @@ koine_pass <- function(formula, data, family,
 #' @param y The response vector (length `nrow(x)`).
 #' @param family A base-R `family` object or a known family name.
 #' @param group Optional grouping vector (length `nrow(x)`) for a single random
-#'   intercept `(1 | group)`; `NULL` for a population model.
+#'   intercept `(1 | group)`; `NULL` for a population model. For the MET
+#'   structure of two crossed/nested random intercepts pass `groups` instead.
+#' @param groups Optional named list of two grouping vectors (each length
+#'   `nrow(x)`) for two crossed/nested random intercepts --- the breeder-standard
+#'   MET structure, e.g. `list(variety = ., trial = .)`. The list names become
+#'   the grouping-factor names; mutually exclusive with `group`.
 #' @param coef_names Optional column names for `x` (defaults to `colnames(x)`).
 #' @param response_name Name recorded for the response (default `"y"`).
-#' @param grouping_name Name recorded for the grouping factor (default `"g"`).
+#' @param grouping_name Name recorded for the (single) grouping factor when
+#'   `group` is supplied (default `"g"`); ignored when `groups` is used.
 #' @inheritParams koine_pass
 #' @return A validated object of class `koine_pass`.
 #' @seealso [koine_pass()], [koine_opinion_draws()]
@@ -149,7 +180,7 @@ koine_pass <- function(formula, data, family,
 #' y <- 1 + 0.5 * x[, "z"] + rnorm(40)
 #' pass <- koine_pass_from_design(x, y, gaussian())
 #' pass$has_re             # FALSE -- a population model, built without a formula
-koine_pass_from_design <- function(x, y, family, group = NULL,
+koine_pass_from_design <- function(x, y, family, group = NULL, groups = NULL,
                                    coef_names = colnames(x),
                                    response_name = "y", grouping_name = "g",
                                    required_outputs = c("posterior",
@@ -169,10 +200,12 @@ koine_pass_from_design <- function(x, y, family, group = NULL,
     stop("koine_pass_from_design(): length(y) must equal nrow(x).",
          call. = FALSE)
   }
-  if (!is.null(group) && length(group) != n) {
-    stop("koine_pass_from_design(): length(group) must equal nrow(x).",
-         call. = FALSE)
+  if (!is.null(group) && !is.null(groups)) {
+    stop("koine_pass_from_design(): supply `group` (single RE) OR `groups` ",
+         "(MET), not both.", call. = FALSE)
   }
+  # Normalise the single / MET grouping inputs into one list of factors.
+  group_list <- .design_group_list(group, groups, grouping_name, n)
   if (is.null(obs_id)) {
     obs_id <- sprintf("obs_%04d", seq_len(n))
   }
@@ -182,15 +215,16 @@ koine_pass_from_design <- function(x, y, family, group = NULL,
   }
   fam_spec <- as_family_spec(family)
   design <- list(X = x, y = y, N = n, K = ncol(x))
-  has_re <- !is.null(group)
+  has_re <- length(group_list) > 0L
   re_design <- NULL
   re_terms <- list()
+  re_structure <- NA_character_
   if (has_re) {
-    gf <- factor(group)
-    re_design <- list(grouping = grouping_name, group = as.integer(gf),
-                      levels = levels(gf), n_groups = nlevels(gf))
-    re_terms <- list(list(grouping = grouping_name, lhs = "1",
-                          random_intercept = TRUE))
+    re_design <- .build_re_design(group_list)
+    re_structure <- if (length(group_list) == 1L) "single" else "met"
+    re_terms <- lapply(names(group_list), function(nm) {
+      list(grouping = nm, lhs = "1", random_intercept = TRUE)
+    })
   }
   # The accessors and most lenses use the stored design directly. A few lenses
   # are formula-driven (the bayesreg shrinkage lens), so synthesise an internal
@@ -204,7 +238,7 @@ koine_pass_from_design <- function(x, y, family, group = NULL,
   pred_names <- colnames(x)[pred_idx]
   data <- as.data.frame(x[, pred_idx, drop = FALSE], check.names = FALSE)
   data[[response_name]] <- y
-  if (has_re) data[[grouping_name]] <- factor(group)
+  for (nm in names(group_list)) data[[nm]] <- group_list[[nm]]
   formula <- if (length(pred_names)) {
     stats::reformulate(sprintf("`%s`", pred_names), response = response_name,
                        intercept = has_intercept)
@@ -218,7 +252,8 @@ koine_pass_from_design <- function(x, y, family, group = NULL,
     fixed_formula = formula,
     re_terms = re_terms,
     has_re = has_re,
-    re_supported = has_re,            # a single random intercept, by construction
+    re_supported = has_re,            # one or two random intercepts, by construction
+    re_structure = re_structure,
     response = response_name,
     data = data,
     design = design,
@@ -233,6 +268,36 @@ koine_pass_from_design <- function(x, y, family, group = NULL,
   pass$ir_hash <- .pass_ir_hash(pass)
   class(pass) <- "koine_pass"
   pass
+}
+
+# Normalise the `group` / `groups` design inputs into a named list of factors
+# (empty list for a population pass). Validates lengths and the two-grouping MET
+# ceiling: more than two groupings is outside this build's supported structure.
+.design_group_list <- function(group, groups, grouping_name, n) {
+  if (!is.null(group)) {
+    if (length(group) != n) {
+      stop("koine_pass_from_design(): length(group) must equal nrow(x).",
+           call. = FALSE)
+    }
+    return(stats::setNames(list(factor(group)), grouping_name))
+  }
+  if (is.null(groups)) {
+    return(list())
+  }
+  if (!is.list(groups) || is.null(names(groups)) || any(!nzchar(names(groups)))) {
+    stop("koine_pass_from_design(): `groups` must be a named list of grouping ",
+         "vectors.", call. = FALSE)
+  }
+  if (length(groups) > 2L) {
+    stop("koine_pass_from_design(): at most two random intercepts (the MET ",
+         "structure) are supported.", call. = FALSE)
+  }
+  bad <- vapply(groups, function(g) length(g) != n, logical(1))
+  if (any(bad)) {
+    stop("koine_pass_from_design(): every vector in `groups` must have length ",
+         "nrow(x).", call. = FALSE)
+  }
+  lapply(groups, factor)
 }
 
 # Content hash over a canonical serialisation of the pass (Stage-0 SS2.4),
@@ -282,15 +347,22 @@ koine_pass_from_design <- function(x, y, family, group = NULL,
   list(X = X, y = as.numeric(y), N = nrow(X), K = ncol(X))
 }
 
-#' Random-effects design for a pass (single random-intercept grouping)
+#' Random-effects design for a pass (single or MET random intercepts)
 #'
-#' Returns the per-observation group index and group count for the grouping
-#' factor of the random intercept. `NULL` for a population pass. Used by the
-#' RE lenses (the per-group marginal likelihood) and the integrated predictive.
+#' Returns the per-observation group index/indices and group counts for the
+#' grouping factor(s) of the random intercept(s). `NULL` for a population pass.
+#' Used by the RE lenses (the marginal likelihood) and the integrated predictive.
+#'
+#' For the single random-intercept case the returned list carries the legacy
+#' fields `grouping`, `group`, `levels`, and `n_groups` directly (so the existing
+#' single-RE code path is byte-identical). It always also carries `factors`, a
+#' per-grouping list of `list(grouping, group, levels, n_groups)`, the `structure`
+#' (`"single"` / `"crossed"` / `"nested"`), and the grouping names --- the surface
+#' the MET marginal core reads.
 #'
 #' @param pass A `koine_pass`.
-#' @return A list with `grouping`, `group` (integer index), `levels`, and
-#'   `n_groups`, or `NULL` when the pass has no random effect.
+#' @return A list as described above, or `NULL` when the pass has no random
+#'   effect.
 #' @keywords internal
 .pass_re_design <- function(pass) {
   if (!isTRUE(pass$has_re)) {
@@ -299,10 +371,51 @@ koine_pass_from_design <- function(x, y, family, group = NULL,
   if (!is.null(pass$re_design)) {
     return(pass$re_design)
   }
-  grouping <- pass$re_terms[[1L]]$grouping
-  f <- factor(pass$data[[grouping]])
-  list(grouping = grouping, group = as.integer(f), levels = levels(f),
-       n_groups = nlevels(f))
+  groupings <- vapply(pass$re_terms, function(t) t$grouping, character(1))
+  group_list <- stats::setNames(
+    lapply(groupings, function(g) factor(pass$data[[g]])), groupings)
+  .build_re_design(group_list)
+}
+
+# Build the random-effects design from a named list of grouping factors. One
+# factor is the single-RE case; two is the MET case, and whether they are crossed
+# or nested is resolved here from the data (nested = each level of the second
+# grouping appears within exactly one level of the first, or vice versa). The
+# single-RE legacy fields are mirrored at the top level so the existing
+# single-intercept code path is untouched.
+.build_re_design <- function(group_list) {
+  factors <- lapply(names(group_list), function(nm) {
+    f <- factor(group_list[[nm]])
+    list(grouping = nm, group = as.integer(f), levels = levels(f),
+         n_groups = nlevels(f))
+  })
+  names(factors) <- names(group_list)
+  structure_kind <- if (length(factors) == 1L) {
+    "single"
+  } else if (.re_is_nested(factors[[1L]]$group, factors[[2L]]$group)) {
+    "nested"
+  } else {
+    "crossed"
+  }
+  out <- list(factors = factors, structure = structure_kind,
+              groupings = names(group_list))
+  # mirror the single-RE fields at the top level (back-compatible accessors)
+  out$grouping <- factors[[1L]]$grouping
+  out$group <- factors[[1L]]$group
+  out$levels <- factors[[1L]]$levels
+  out$n_groups <- factors[[1L]]$n_groups
+  out
+}
+
+# Two groupings are nested when each level of one appears within a single level
+# of the other (the breeder case where trials sit inside regions, say). Crossed
+# otherwise (each variety grown across many trials, each trial holding many
+# varieties --- the usual MET).
+.re_is_nested <- function(g1, g2) {
+  nested_within <- function(inner, outer) {
+    all(tapply(outer, inner, function(o) length(unique(o)) == 1L))
+  }
+  nested_within(g2, g1) || nested_within(g1, g2)
 }
 
 #' @export
@@ -310,10 +423,17 @@ print.koine_pass <- function(x, ...) {
   cat("<koine pass>\n")
   cat("  formula : ", deparse(x$formula), "\n", sep = "")
   if (isTRUE(x$has_re)) {
-    re <- x$re_terms[[1L]]
-    cat("  random  : (", re$lhs, " | ", re$grouping, ")",
-        if (!isTRUE(x$re_supported)) "  [unsupported structure]" else "",
-        "\n", sep = "")
+    terms <- vapply(x$re_terms, function(re) {
+      sprintf("(%s | %s)", re$lhs, re$grouping)
+    }, character(1))
+    tag <- if (!isTRUE(x$re_supported)) {
+      "  [unsupported structure]"
+    } else if (identical(x$re_structure, "met")) {
+      "  [MET]"
+    } else {
+      ""
+    }
+    cat("  random  : ", paste(terms, collapse = " + "), tag, "\n", sep = "")
   }
   cat("  family  : ", x$family$name, " / ", x$family$link, "\n", sep = "")
   cat("  N       : ", length(x$obs_dim_names$obs_id), "\n", sep = "")
