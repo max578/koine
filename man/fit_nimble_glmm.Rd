@@ -13,7 +13,9 @@ fit_nimble_glmm(
 )
 }
 \arguments{
-\item{pass}{A \code{koine_pass} carrying a single random intercept \code{(1 | g)}.}
+\item{pass}{A \code{koine_pass} carrying a single random intercept \code{(1 | g)}, or the
+MET structure of two crossed/nested random intercepts
+\code{(1 | variety) + (1 | trial)}.}
 
 \item{lens_spec}{The lens's registry record; defaults to the registry's
 \code{nimble_glmm} record.}

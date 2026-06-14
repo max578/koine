@@ -9,6 +9,7 @@ Casella
 Comput
 DREAMzs
 DataTree
+Eigen
 Gaussianity
 GLMM
 GLMMs
@@ -16,6 +17,7 @@ GRDC
 Gronau
 HMC
 Hermite
+INLA
 LMM
 Meng
 NIMBLE's
@@ -50,4 +52,5 @@ reparameterisation
 spec's
 standalone
 ter
+ungroundedness
 unnormalised

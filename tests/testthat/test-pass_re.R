@@ -19,10 +19,15 @@ test_that("a single random intercept is parsed and flagged supported", {
 })
 
 test_that("unsupported random-effects structures are flagged, never mis-parsed", {
-  d <- data.frame(y = rnorm(20), x = rnorm(20),
-                  g = factor(rep(1:4, 5)), h = factor(rep(1:2, 10)))
+  d <- data.frame(y = rnorm(60), x = rnorm(60),
+                  g = factor(rep(1:6, 10)), h = factor(rep(1:5, 12)),
+                  k = factor(rep(1:4, 15)))
   expect_false(koine_pass(y ~ x + (x | g), d, gaussian())$re_supported)  # slope
-  expect_false(koine_pass(y ~ x + (1 | g) + (1 | h), d, gaussian())$re_supported)
+  # two crossed intercepts are now the SUPPORTED MET structure (Stage-3); three
+  # groupings remain outside the supported (single / MET) intercept structure.
+  expect_true(koine_pass(y ~ x + (1 | g) + (1 | h), d, gaussian())$re_supported)
+  expect_false(
+    koine_pass(y ~ x + (1 | g) + (1 | h) + (1 | k), d, gaussian())$re_supported)
 })
 
 test_that("the feature gate matches lenses to passes symmetrically", {

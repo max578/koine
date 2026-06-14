@@ -15,7 +15,9 @@ fit_glmm_marginal(
 )
 }
 \arguments{
-\item{pass}{A \code{koine_pass} carrying a single random intercept \code{(1 | g)}.}
+\item{pass}{A \code{koine_pass} carrying a single random intercept \code{(1 | g)}, or the
+MET structure of two crossed/nested random intercepts
+\code{(1 | variety) + (1 | trial)}.}
 
 \item{lens_spec}{The lens's registry record; defaults to the registry's
 \code{glmm_marginal} record.}
@@ -49,10 +51,19 @@ variance-component funnel a single static-metric kernel cannot traverse --- a
 funnel-safe blocked sampler is used: \verb{log tau} is slice-sampled, and the
 coefficients are slice-sampled along their \code{tau}-resolved principal axes (a
 Gibbs block that needs no step size and cannot stall); the Gaussian and
-binomial marginals keep the joint NUTS kernel. The pointwise log-likelihood is
-left \code{NULL} for \code{\link[=assemble_loglik]{assemble_loglik()}} to compute as the per-observation
-integrated predictive (F3). If the pass carries no supported random intercept,
-returns a lens-scope \code{\link[=abstention]{abstention()}} rather than a wrong fit (I1).
+binomial marginals keep the joint NUTS kernel.
+}
+\details{
+For the breeder-standard multi-environment-trial (MET) structure --- two
+crossed or nested random intercepts \code{(1 | variety) + (1 | trial)} --- the
+Gaussian marginal stays exact (a dense Cholesky of \verb{V = sigma^2 I + sum_r tau_r^2 Z_r Z_r'}) and is sampled by a coordinate-wise slice kernel over
+\verb{(beta, sigma, tau_variety, tau_trial)}; the draws then carry one
+\verb{tau_<grouping>} per random factor. A non-Gaussian MET (a dense crossed-GLMM
+marginal, which has no exact quadrature) returns a lens-scope \code{\link[=abstention]{abstention()}}.
+The pointwise log-likelihood is left \code{NULL} for \code{\link[=assemble_loglik]{assemble_loglik()}} to compute
+as the per-observation integrated predictive (F3). If the pass carries no
+supported random intercept, returns a lens-scope \code{\link[=abstention]{abstention()}} rather than a
+wrong fit (I1).
 }
 \examples{
 \donttest{

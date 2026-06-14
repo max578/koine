@@ -16,11 +16,14 @@ koine_pass(
 )
 }
 \arguments{
-\item{formula}{A model formula. Population-level terms, optionally with a
-single \code{lme4}-style random intercept \code{(1 | g)} on one grouping factor.
-Richer random-effects structure (random slopes, multiple or crossed/nested
-groupings, correlated effects) is parsed and flagged unsupported so the
-battery abstains non-silently rather than fitting the wrong model.}
+\item{formula}{A model formula. Population-level terms, optionally with
+\code{lme4}-style random \emph{intercepts}: a single \code{(1 | g)}, or the breeder-standard
+multi-environment-trial (MET) structure of two crossed or nested random
+intercepts \code{(1 | variety) + (1 | trial)}. Richer random-effects structure
+(random slopes, correlated effects, more than two groupings) is parsed and
+flagged unsupported so the battery abstains non-silently rather than fitting
+the wrong model. Whether two groupings are crossed or nested is resolved
+from the data, never from the formula.}
 
 \item{data}{A data frame holding every column referenced in \code{formula}.}
 

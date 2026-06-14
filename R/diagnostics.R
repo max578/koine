@@ -171,6 +171,15 @@ evidence_axis <- function(fb_fits, pass, beta_prior_sd = 5,
                 role = "diagnostic",
                 note = "bridgesampling not installed; evidence axis skipped."))
   }
+  if (isTRUE(pass$has_re) && identical(pass$re_structure, "met")) {
+    # The single-variance-component bridge marginal below cannot score a MET
+    # model's two crossed/nested variance components; the diagnostic declines the
+    # MET case honestly rather than score the wrong (single-RE) marginal (I1).
+    return(list(available = FALSE, prior_conditional = TRUE,
+                role = "diagnostic",
+                note = paste0("evidence axis not available for the MET ",
+                              "(two crossed/nested intercepts) structure.")))
+  }
   design <- .pass_design(pass)
   has_sigma <- identical(pass$family$name, "gaussian")
   bcols <- paste0("b_", colnames(design$X))

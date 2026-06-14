@@ -56,20 +56,26 @@ The battery spans three diversity axes: inference-family witnesses (DRAM,
 NIMBLE-Gibbs, Polya-Gamma Gibbs, DREAM_ZS), a heavy-tail structure variant
 (robust-t), and a shrinkage spectrum (ridge / lasso / horseshoe).
 
-koine also handles a single random intercept `(1 | g)` --- for the Gaussian LMM
-and the binomial GLMM --- on an axis orthogonal to the sealed engines:
-NIMBLE-Gibbs *samples* the random effects while the marginal lens *integrates*
-them out (exactly for the Gaussian LMM, by adaptive Gauss-Hermite quadrature for
-a GLMM). A Poisson GLMM path is implemented but held experimental (its
-count-intercept marginal does not yet pass calibration). A spectrum of further
-lenses gives the random intercepts heavy
+koine also handles random *intercept* structure --- a single random intercept
+`(1 | g)` and the breeder-standard multi-environment-trial (MET) structure of
+two crossed or nested intercepts `(1 | variety) + (1 | trial)` --- on an axis
+orthogonal to the sealed engines: NIMBLE-Gibbs *samples* the random effects while
+the marginal lens *integrates* them out (exactly for the Gaussian LMM and the
+Gaussian MET via a dense Cholesky of the marginal covariance, by adaptive
+Gauss-Hermite quadrature for a single-intercept GLMM). The Gaussian, binomial,
+and Poisson single-intercept GLMMs are enrolled; a non-Gaussian MET (a dense
+crossed-GLMM marginal with no exact quadrature) abstains rather than approximate.
+The MET lift lets koine corroborate a production MET model *directly* --- on the
+variety-plus-trial structure that model fits --- rather than on a
+single-random-effect reduction that discards the trial structure. A spectrum of
+further lenses gives the random intercepts heavy
 (Student-t) tails across a grid of degrees of freedom, so where the Gaussian-RE
 lenses corroborate they earn stacking weight when group effects are outlying ---
 koine's RE opinion is sensitive to random-effect structure, not a weighted echo
 of one assumption. All are stacked on the same per-observation integrated
 predictive, which keeps the leave-one-out gate reliable; richer random-effects
-structure is refused (`feature_unsupported`) rather than fitted as the wrong
-model.
+structure (a random slope, more than two groupings) is refused
+(`feature_unsupported`) rather than fitted as the wrong model.
 
 ### Validation
 

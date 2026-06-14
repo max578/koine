@@ -57,21 +57,30 @@ assemble_loglik <- function(fb_fits, pass) {
     eta <- beta %*% t(design$X)                       # S x N fixed predictor
     has_sigma <- "sigma" %in% colnames(mat)
     # Random-effects branch: stack on the per-observation INTEGRATED predictive
-    # (the random effect marginalised under each draw's tau), not conditional
-    # log-likelihood --- so every RE lens predicts the identical held-out
-    # quantity and the PSIS gate stays in its reliable regime (Stage-2).
+    # (the random effect marginalised under each draw's variance components), not
+    # the conditional log-likelihood --- so every RE lens predicts the identical
+    # held-out quantity and the PSIS gate stays in its reliable regime (Stage-2).
     re <- isTRUE(pass$has_re)
-    if (re && !("tau" %in% colnames(mat))) {
+    # MET draws carry one `tau_<grouping>` column per crossed/nested intercept;
+    # the single-RE case carries a lone `tau`. The integrated predictive for a new
+    # observation marginalises a fresh effect from every random factor (Stage-3).
+    tau_cols <- grep("^tau", colnames(mat), value = TRUE)
+    met <- re && length(tau_cols) > 1L
+    if (re && !met && !("tau" %in% colnames(mat))) {
       koine_abort("obs_axis_mismatch",
                   "random-effects draws lack the expected tau variable.")
     }
-    gh <- if (re) .gh_rule() else NULL
-    tau <- if (re) mat[, "tau"] else NULL
+    gh <- if (re && !met) .gh_rule() else NULL
+    tau <- if (re && !met) mat[, "tau"] else NULL
+    tau_mat <- if (met) mat[, tau_cols, drop = FALSE] else NULL
     S <- nrow(mat)
     ll <- matrix(NA_real_, nrow = S, ncol = design$N)
     for (s in seq_len(S)) {
       aux <- if (has_sigma) list(sigma = mat[s, "sigma"]) else list()
-      ll[s, ] <- if (re) {
+      ll[s, ] <- if (met) {
+        .re_integrated_loglik_met(design$y, eta[s, ], tau_mat[s, ],
+                                  mat[s, "sigma"])
+      } else if (re) {
         .re_integrated_loglik(pass$family, design$y, eta[s, ], tau[s], aux, gh)
       } else {
         pass$family$loglik_pointwise(design$y, eta[s, ], aux)
