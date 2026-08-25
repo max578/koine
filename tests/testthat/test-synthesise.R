@@ -114,3 +114,18 @@ test_that("K1: a lens-level abstention is carried into lenses_dropped with its t
     dropped_reasons[dropped_ids == "abstaining_lens"],
     "convergence_failed")
 })
+
+test_that("K6: the RE-unsupported synthesis abstention states the true supported corner", {
+  # Since 0.3.0 the supported corner is a single random intercept OR the MET
+  # structure of two crossed/nested intercepts (registry.R's own wording for
+  # the identical guard at lens-resolution time), not "a single random
+  # intercept on one grouping factor" as synthesise() used to claim.
+  d <- data.frame(y = rnorm(60), x = rnorm(60),
+                  g = factor(rep(1:20, each = 3)))
+  pass_bad <- koine_pass(y ~ x + (x | g), d, gaussian())
+  out <- synthesise(pass_bad)
+  expect_true(is_abstention(out))
+  expect_false(grepl("on one grouping factor", out$detail, fixed = TRUE))
+  expect_true(grepl("MET structure of two crossed/nested intercepts",
+                    out$detail, fixed = TRUE))
+})

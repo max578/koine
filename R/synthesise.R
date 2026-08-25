@@ -114,6 +114,9 @@ assemble_loglik <- function(fb_fits, pass) {
 #' @param loglik_list Output of [assemble_loglik()].
 #' @return A list with `loo` (named list of loo objects for retained lenses),
 #'   `kept` (ids), `dropped` (`list(id =, reason =, k =)`), and `threshold`.
+#' @references Vehtari, A., Simpson, D., Gelman, A., Yao, Y., & Gabry, J.
+#'   (2024). Pareto smoothed importance sampling. *Journal of Machine
+#'   Learning Research*, 25(72), 1-58.
 #' @examples
 #' \donttest{
 #' set.seed(1)
@@ -156,6 +159,9 @@ gate_psis <- function(loglik_list) {
 #' @param loo_list A named list of loo objects (the gate's `loo`).
 #' @return A list with `weights` (named simplex), `elpd_stacked`, and
 #'   `n_components`.
+#' @references Yao, Y., Vehtari, A., Simpson, D., & Gelman, A. (2018). Using
+#'   stacking to average Bayesian predictive distributions. *Bayesian
+#'   Analysis*, 13(3), 917-1007.
 #' @examples
 #' \donttest{
 #' set.seed(1)
@@ -276,8 +282,9 @@ synthesise <- function(pass, registry = koine_stage1_registry(),
       "feature_unsupported", scope = "synthesis",
       detail = paste0(
         "the random-effects structure is outside this build's support ",
-        "(a single random intercept on one grouping factor); koine abstains ",
-        "rather than mis-modelling it.")))
+        "(only a single random intercept, or the MET structure of two ",
+        "crossed/nested intercepts, is supported); koine abstains rather ",
+        "than mis-modelling it.")))
   }
   resolved <- resolve_battery(pass, registry)
   opinion <- Filter(function(L) identical(L$role, "opinion"),
