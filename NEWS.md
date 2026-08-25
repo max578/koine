@@ -1,3 +1,15 @@
+# koine (development version)
+
+* **Fix**: `synthesise()` no longer silently drops a lens that abstains at
+  fit time. Previously the fit-time `koine_abstention` a lens returns had no
+  `$status` field, so the "contributed" filter dropped it without recording
+  why, and the synthesis-level abstention then blamed the PSIS gate
+  (`psis_unreliable`) even when no lens ever reached it. The lens's real
+  reason (e.g. `convergence_failed`, `feature_unsupported`) now propagates to
+  the synthesis-level `reason` when it is the sole distinct reason among the
+  declining lenses, and every declining lens is carried into
+  `lenses_dropped` with that reason.
+
 # koine 0.3.0
 
 ## New features
