@@ -9,6 +9,10 @@
   the synthesis-level `reason` when it is the sole distinct reason among the
   declining lenses, and every declining lens is carried into
   `lenses_dropped` with that reason.
+* `inst/INTEGRATION.md` refreshed to describe the MET random-effects
+  structure (two crossed/nested intercepts) as in-corner, add the `groups`
+  argument to the IR-mapping table, and correct the stale version/licence
+  status block.
 
 # koine 0.3.0
 
