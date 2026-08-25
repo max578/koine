@@ -19,7 +19,7 @@ library(koine)
 ## What koine does
 
 koine synthesises *one* coherent, independent predictive opinion for a Bayesian
-model from a curated battery of inference lenses --- or it abstains when no
+model from a curated battery of inference lenses -- or it abstains when no
 diversity gain exists. It stacks over model-structure and method diversity in
 predictive space, on an axis orthogonal to any panel of inference engines it
 sits beside. This vignette walks the increment-1 spine: the request, the
@@ -52,7 +52,7 @@ fs$loglik_pointwise(y = c(0, 1), eta = c(0, 1), aux = list(sigma = 1))
 ## The battery
 
 `resolve_battery()` enrols only the lenses whose family, features, and tier fit
-the request --- and records *why* each excluded lens was left out. Honest,
+the request -- and records *why* each excluded lens was left out. Honest,
 logged absence is the rule; silent omission is never allowed.
 
 ```{r resolve}
@@ -61,7 +61,7 @@ vapply(res$enrolled, function(L) L$id, character(1))
 res$excluded
 ```
 
-For this Gaussian model several lenses resolve --- DRAM, NIMBLE-Gibbs and DREAM
+For this Gaussian model several lenses resolve -- DRAM, NIMBLE-Gibbs and DREAM
 (different inference families on the same posterior), plus the model-structure
 variants: robust-t and a shrinkage spectrum (ridge, lasso, horseshoe). The
 Polya-Gamma Gibbs lens is excluded on family grounds (it serves binomial
@@ -80,7 +80,7 @@ The estimated intercept and slope recover the data-generating `1.5` and `0.8`.
 ## Synthesis: realising diversity
 
 koine's value as a fourth witness comes from *diversity*. Lenses that fit the
-same model only corroborate one another --- a useful consistency check, but the
+same model only corroborate one another -- a useful consistency check, but the
 stacking weights then collapse onto a single component. Genuine diversity needs
 a different model *structure*. The robust-t lens supplies one: a Student-t
 likelihood whose heavy tails give a materially different predictive when the
@@ -106,20 +106,58 @@ res$independence[, c("lens_id", "family", "kernel")]
 
 The weights do not collapse: the Gaussian (DRAM) and Student-t lenses each carry
 real weight, and the diversity diagnostic reports more than one effective
-component. That spread is the orthogonal-diversity signal --- the fourth opinion
+component. That spread is the orthogonal-diversity signal -- the fourth opinion
 is sensitive to model structure, not a weighted echo of a single posterior.
+
+```{r fig-weights, fig.cap = "Stacking weights for the two-lens heavy-tailed battery, with the effective-component count n_eff annotated. Neither lens is at zero, so the mixture is a genuine blend, not a corroboration collapse onto one structure.", fig.alt = "Horizontal bar chart of stacking weights for the dram and robust_t lenses, both above roughly 0.3, with the effective-component count n_eff printed in the title."}
+w <- res$opinion$weights
+n_eff <- res$diagnostics$weight_concentration$n_eff
+op <- graphics::par(mar = c(4, 8, 3, 1))
+graphics::barplot(rev(w), horiz = TRUE, las = 1, xlim = c(0, 1),
+                  col = "#4C72B0", border = NA,
+                  xlab = "stacking weight",
+                  main = sprintf("n_eff = %.2f effective lens(es)", n_eff))
+graphics::par(op)
+```
+
+Neither bar sits near zero: the Gaussian and Student-t lenses split the
+stacking weight rather than one dominating, which is what "more than one
+effective component" (`n_eff`) means as a picture -- a battery that
+corroborated a single structure would instead show one bar near 1 and the
+other near 0.
+
+```{r fig-envelope, fig.cap = "The over-dispersed linear-pool envelope for the heavy-tailed battery: the pooled posterior-mean response (line) and its 95% envelope (band), built from the two lenses' means and their between-lens disagreement, against the fitted x range.", fig.alt = "Scatter of the heavy-tailed data with a shaded 95 percent envelope band around a pooled mean-response line, wide enough to contain nearly all points."}
+lpe <- res$diagnostics$linear_pool_envelope
+ord <- order(xd)
+graphics::plot(xd[ord], yd[ord], pch = 16, col = "grey45", cex = 0.6,
+              xlab = "x", ylab = "y",
+              main = "Pool envelope: pooled mean response and its 95% band")
+graphics::polygon(c(xd[ord], rev(xd[ord])),
+                  c(lpe$lower[ord], rev(lpe$upper[ord])),
+                  col = grDevices::adjustcolor("#4C72B0", alpha.f = 0.25),
+                  border = NA)
+graphics::lines(xd[ord], lpe$pool_mean[ord], col = "#4C72B0", lwd = 2)
+```
+
+The band is deliberately wider than either lens's own credible interval
+because it inflates for *between*-lens disagreement as well as within-lens
+uncertainty (`R/diagnostics.R`'s `inflate` term); a handful of the
+heaviest-tailed points still fall outside it, which is exactly the residual
+the Student-t lens's non-zero weight is there to absorb.
 
 ## Mixed models: a random intercept
 
 koine also handles a single random intercept, `(1 | g)`. The opinion is built on
 an axis orthogonal to the sealed engines: NIMBLE-Gibbs (`fit_nimble_glmm()`)
 *samples* the random effects, while the marginal lens (`fit_glmm_marginal()`,
-shown here because it needs no extra toolchain) *integrates* them out --- exactly
+shown here because it needs no extra toolchain) *integrates* them out -- exactly
 for the Gaussian LMM, by adaptive Gauss-Hermite quadrature for the binomial GLMM.
 Both report `(beta, sigma, tau)` and are stacked on the same per-observation
 *integrated* predictive (the random effect marginalised under each draw's
-variance components), which keeps the leave-one-out gate reliable. (A Poisson
-GLMM path exists but is held experimental pending a better-mixing sampler.)
+variance components), which keeps the leave-one-out gate reliable. (Poisson is
+enrolled alongside Gaussian and binomial, on a funnel-safe blocked-slice
+kernel; a post-fit convergence gate makes the lens abstain rather than
+contribute where the variance component is too weakly identified to mix.)
 
 ```{r re}
 set.seed(20)
@@ -138,21 +176,29 @@ posterior::summarise_draws(fit_re$draws, "mean")    # recovers beta, sigma, tau
 A third lens, `fit_glmm_robust_re()`, gives the random intercepts heavy
 (Student-t) tails. Where the two Gaussian-RE lenses corroborate (their weights
 collapse), this structure variant earns real stacking weight when group effects
-are outlying --- so koine's mixed-model opinion, like its population battery,
+are outlying -- so koine's mixed-model opinion, like its population battery,
 becomes sensitive to model structure rather than a weighted echo of one
 assumption.
 
 ## Multi-environment trials: variety and trial together
 
 The breeder-standard multi-environment-trial (MET) model carries *two* random
-intercepts --- a variety effect and a trial (environment) effect, crossed (each
+intercepts -- a variety effect and a trial (environment) effect, crossed (each
 variety grown across many trials) or nested. koine fits this structure directly
 with `(1 | variety) + (1 | trial)`, so it corroborates a production MET model on
 the model that model actually fits, not on a single-random-effect reduction that
 discards the trial structure. The Gaussian MET marginal stays exact: the random
-effects are integrated out through a dense Cholesky of `V = sigma^2 I +
-tau_variety^2 Z_variety Z_variety' + tau_trial^2 Z_trial Z_trial'`, where the
-sealed engines instead sample (NIMBLE) or Laplace-approximate (INLA) them.
+effects are integrated out analytically, through a dense Cholesky of the
+marginal covariance
+
+$$V = \sigma^2 I + \tau_{\text{variety}}^2 Z_{\text{variety}} Z_{\text{variety}}^\top +
+\tau_{\text{trial}}^2 Z_{\text{trial}} Z_{\text{trial}}^\top,$$
+
+where $Z_{\text{variety}}$ and $Z_{\text{trial}}$ are the (0/1) grouping
+indicator matrices for each random factor and $\tau_{\text{variety}}$,
+$\tau_{\text{trial}}$ are their variance-component standard deviations --
+where the sealed engines instead sample (NIMBLE) or Laplace-approximate (INLA)
+them.
 
 ```{r met}
 set.seed(404)
@@ -183,7 +229,7 @@ posterior::summarise_draws(fit_met$draws, "mean")  # b0, sigma, tau_variety, tau
 
 The draws now carry one `tau_<grouping>` per random factor. koine's MET variety
 effects corroborate the production MET model (here `lme4`, fitted by REML)
-faithfully, and far more so than the single-random-intercept reduction --- which,
+faithfully, and far more so than the single-random-intercept reduction -- which,
 on an unbalanced trial with a dominant environment effect, confounds each
 variety with the trials it happened to be grown in.
 
@@ -208,7 +254,7 @@ c(koine_MET_vs_production = cor(u_koine, blup_met),
   single_RE_vs_production = cor(blup_single, blup_met))
 ```
 
-A non-Gaussian MET --- whose dense crossed marginal has no exact quadrature ---
+A non-Gaussian MET -- whose dense crossed marginal has no exact quadrature --
 is declined honestly rather than approximated:
 
 ```{r met-glmm-abstain}
@@ -230,8 +276,8 @@ synthesise(pass_bad)$reason
 ## When koine abstains
 
 Abstention is a first-class outcome, not an error. If fewer than two
-independent opinion lenses resolve --- for instance with a single-lens battery
---- koine declines to guess and says why.
+independent opinion lenses resolve -- for instance with a single-lens battery
+-- koine declines to guess and says why.
 
 ```{r abstain}
 out <- synthesise(pass, registry = list(koine_stage1_registry()[[1]]))

@@ -31,3 +31,8 @@ gate <- gate_psis(assemble_loglik(fits, pass))
 if (length(gate$kept) >= 2L) stack_opinion(gate$loo)
 }
 }
+\references{
+Yao, Y., Vehtari, A., Simpson, D., & Gelman, A. (2018). Using
+stacking to average Bayesian predictive distributions. \emph{Bayesian
+Analysis}, 13(3), 917-1007.
+}

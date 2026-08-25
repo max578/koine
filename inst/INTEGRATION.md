@@ -21,11 +21,19 @@ diagnostic is surfaced, never shipped as a pooled posterior over the engines.
 ## The supported-model corner (capability)
 
 koine contributes only where its battery can field a diverse, reliable opinion.
-In this build that is the population GLM and the single random intercept
-`(1 | g)` on one grouping factor, for the `gaussian`, `binomial`, and (pending
-its validation gate) `poisson` families. Everything richer --- random slopes,
-crossed or multiple groupings, correlated effects, factor-analytic or genomic
-(`vm` / `ped`) structures, splines, `AR1`, GxE --- is **out of corner**, and
+In this build (0.3.0) that is: the population GLM; the single random intercept
+`(1 | g)` on one grouping factor; and the **MET structure** --- two crossed or
+nested random intercepts (`(1 | variety) + (1 | trial)`) --- for the
+`gaussian`, `binomial`, and `poisson` families (Poisson enrolled at 0.2.0,
+validated by SBC + NIMBLE concordance). For the Gaussian MET, the marginal is
+exact (dense Cholesky); a non-Gaussian MET fits via the marginalised
+NUTS/blocked-slice kernel and can itself abstain (`convergence_failed`) where
+the marginalised variance component is too weakly identified to mix, per
+lens (`R/registry.R`, the `glmm_marginal` record).
+
+Everything richer --- random slopes, three or more crossed groupings,
+correlated effects, factor-analytic or genomic (`vm` / `ped`) structures,
+splines, `AR1`, GxE, multivariate responses --- is **out of corner**, and
 koine abstains rather than mis-modelling it. Abstention is the honest default,
 not a failure.
 
@@ -53,10 +61,15 @@ ok <- koine::koine_can_contribute(formula, data, family)
    | the response                               | `y`                                      |
    | `family`, `link`                           | `family`                                 |
    | a single random intercept's grouping factor | `group`                                 |
+   | two crossed/nested random intercepts (MET) | `groups = list(variety = v, trial = t)` |
    | any out-of-corner term                     | koine abstains (or pre-gate via `koine_can_contribute()`) |
 
    ```r
    pass <- koine::koine_pass_from_design(x, y, family, group = g,
+                                         seed = <integer>)
+   # or, for the MET structure (supply `group` OR `groups`, never both):
+   pass <- koine::koine_pass_from_design(x, y, family,
+                                         groups = list(variety = v, trial = t),
                                          seed = <integer>)
    ```
 
@@ -122,7 +135,8 @@ koine's draws use stable variable names the parent maps to its canonical
 | `b_(Intercept)`    | fixed intercept                  | `b_Intercept`          |
 | `b_<col>`          | fixed coefficient for `<col>`    | `b_<col>`              |
 | `sigma`            | Gaussian residual SD             | `sigma`                |
-| `tau`              | random-intercept SD              | `sd_<g>__Intercept`    |
+| `tau`              | single random-intercept SD       | `sd_<g>__Intercept`    |
+| `tau_<grouping>`   | MET random-intercept SD (one per crossed/nested factor) | `sd_<grouping>__Intercept` |
 
 ## Independence registration (parent ADR 0029)
 
@@ -141,13 +155,11 @@ consequences for the parent's independence registry:
   `res$independence` to surface koine's realised, weight-weighted independence
   profile rather than a static label.
 
-## Status and governance gates (not yet cleared)
+## Status and governance gates
 
-* **Version** `0.0.0.9000` (development; not released). The parent gates
+* **Version** `0.3.0` (released; private `max578/koine`). The parent gates
   availability on koine's presence (a `Suggests` dependency).
-* **Licence** undeclared (`License: file LICENSE`) pending the required
-  consultation; alignment with the parent's `GPL (>= 3)` is the expectation at
-  graduation. Do not ship publicly before this is resolved.
+* **Licence** `MIT + file LICENSE` (declared; see `LICENSE`/`LICENSE.md`).
 * **Cross-engine concordance** (the third validation criterion) is deferred to
   graduation: koine's lenses must be concordance-checked against the engine
   panel on shared in-corner models once the parent is present.

@@ -5,10 +5,10 @@ notes below keep contributions consistent with the house conventions.
 
 ## Workflow
 
-- Branch off `dev` (not `main`): `feature/<short-name>` or `bugfix/<short-name>`.
-  `main` stays production-ready; merge upward only after the checks pass.
+- Branch off `main`: `feature/<short-name>` or `bugfix/<short-name>`. Merge
+  back to `main` only after the checks pass.
 - Keep commits small and focused, and explain *why* in the message
-  (e.g. "address #2 --- reconstruct pointwise log-likelihood via the family
+  (e.g. "address #2 -- reconstruct pointwise log-likelihood via the family
   spec", not "minor change").
 - A pull request that closes an issue must say so in its body: `Fixes #<n>`.
 
@@ -36,7 +36,7 @@ to triangulation: simulation-based calibration and a reference-posterior check
 (see `inst/validation/` and `koine_lens_validation_setup()`). Wire the lens's
 generative model into the validation harness, run the study, record the verdict,
 and attach the resulting `validation_ref` in the registry. An unvalidated lens
-must abstain --- it is never silently trusted.
+must abstain -- it is never silently trusted.
 
 ## Code of Conduct
 

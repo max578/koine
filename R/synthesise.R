@@ -114,6 +114,9 @@ assemble_loglik <- function(fb_fits, pass) {
 #' @param loglik_list Output of [assemble_loglik()].
 #' @return A list with `loo` (named list of loo objects for retained lenses),
 #'   `kept` (ids), `dropped` (`list(id =, reason =, k =)`), and `threshold`.
+#' @references Vehtari, A., Simpson, D., Gelman, A., Yao, Y., & Gabry, J.
+#'   (2024). Pareto smoothed importance sampling. *Journal of Machine
+#'   Learning Research*, 25(72), 1-58.
 #' @examples
 #' \donttest{
 #' set.seed(1)
@@ -156,6 +159,9 @@ gate_psis <- function(loglik_list) {
 #' @param loo_list A named list of loo objects (the gate's `loo`).
 #' @return A list with `weights` (named simplex), `elpd_stacked`, and
 #'   `n_components`.
+#' @references Yao, Y., Vehtari, A., Simpson, D., & Gelman, A. (2018). Using
+#'   stacking to average Bayesian predictive distributions. *Bayesian
+#'   Analysis*, 13(3), 917-1007.
 #' @examples
 #' \donttest{
 #' set.seed(1)
@@ -276,8 +282,9 @@ synthesise <- function(pass, registry = koine_stage1_registry(),
       "feature_unsupported", scope = "synthesis",
       detail = paste0(
         "the random-effects structure is outside this build's support ",
-        "(a single random intercept on one grouping factor); koine abstains ",
-        "rather than mis-modelling it.")))
+        "(only a single random intercept, or the MET structure of two ",
+        "crossed/nested intercepts, is supported); koine abstains rather ",
+        "than mis-modelling it.")))
   }
   resolved <- resolve_battery(pass, registry)
   opinion <- Filter(function(L) identical(L$role, "opinion"),
@@ -290,15 +297,41 @@ synthesise <- function(pass, registry = koine_stage1_registry(),
         length(opinion)),
       lenses_dropped = resolved$excluded))
   }
-  fits <- lapply(opinion, function(L) L$fit_fn(pass, L))
-  fits <- Filter(function(f) identical(f$status, "contributed"), fits)
+  fits <- Map(function(L, fit) list(lens = L, fit = fit), opinion,
+             lapply(opinion, function(L) L$fit_fn(pass, L)))
+  # A lens declining at fit time returns a `koine_abstention` value (never a
+  # condition, never a bare `NA`) --- carry its true reason forward rather than
+  # silently dropping it and letting the PSIS gate below take the blame (K1).
+  lens_abstained <- Filter(Negate(is.null), lapply(fits, function(pair) {
+    if (is_abstention(pair$fit)) {
+      list(id = pair$lens$id, reason = pair$fit$reason)
+    } else {
+      NULL
+    }
+  }))
+  contributed <- Filter(
+    function(pair) identical(pair$fit$status, "contributed"), fits)
+  fits <- lapply(contributed, `[[`, "fit")
+  if (length(fits) < 2L) {
+    reasons <- unique(vapply(lens_abstained, `[[`, character(1L), "reason"))
+    # A single distinct lens reason propagates as the synthesis-level reason;
+    # a mix of reasons (or none, e.g. a lens contributed but was later dropped
+    # for some other cause) falls back to the generic diversity abstention.
+    reason <- if (length(reasons) == 1L) reasons else "no_diverse_battery"
+    return(abstention(
+      reason, scope = "synthesis",
+      detail = sprintf(
+        "only %d of %d opinion lens(es) contributed a fit; >= 2 needed.",
+        length(fits), length(opinion)),
+      lenses_dropped = c(resolved$excluded, lens_abstained)))
+  }
   loglik_list <- assemble_loglik(fits, pass)
   gate <- gate_psis(loglik_list)
   if (length(gate$kept) < 2L) {
     return(abstention(
       "psis_unreliable", scope = "synthesis",
       detail = "fewer than two lenses survived the PSIS reliability gate.",
-      lenses_dropped = gate$dropped))
+      lenses_dropped = c(lens_abstained, gate$dropped)))
   }
   stacked <- stack_opinion(gate$loo)
   conc <- weight_concentration(stacked$weights)

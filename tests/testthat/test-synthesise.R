@@ -75,3 +75,57 @@ test_that("gate_psis drops nothing for a well-behaved Gaussian fit", {
   expect_length(g$dropped, 0L)
   expect_true(g$threshold <= 0.7)
 })
+
+test_that("K1: a lens-level abstention is carried into lenses_dropped with its true reason", {
+  # Flagship reproduction: one lens contributes, one lens abstains at fit time
+  # (e.g. `convergence_failed`, as `fit_glmm_marginal()` does for a poorly-mixed
+  # marginalised random-intercept fit). Both are resolved into the opinion
+  # battery (family/feature support are satisfied), so the synthesis-level
+  # abstention must report the lens's real reason, not a generic PSIS failure.
+  reg <- koine_stage1_registry()
+  dram_spec <- reg[[which(vapply(reg, function(z) z$id, "") == "dram")]]
+  abstaining_spec <- dram_spec
+  abstaining_spec$id <- "abstaining_lens"
+  abstaining_spec$independence_key <- list(family = "random_walk",
+                                           kernel = "abstaining-test-lens")
+  abstaining_spec$fit_fn <- function(pass, lens_spec) {
+    abstention("convergence_failed", scope = "lens",
+              detail = "ess too low for a stable predictive (test double).")
+  }
+
+  set.seed(11)
+  n <- 40L
+  x <- rnorm(n)
+  y <- 0.3 + 0.8 * x + rnorm(n, sd = 0.7)
+  pass <- koine_pass(y ~ x, data.frame(y = y, x = x), gaussian(), seed = 7L)
+
+  out <- synthesise(pass, registry = list(dram_spec, abstaining_spec))
+
+  expect_true(is_abstention(out))
+  # A single distinct lens reason propagates to the synthesis-level reason
+  # (rather than the generic "psis_unreliable" the PSIS gate would otherwise
+  # be blamed for).
+  expect_identical(out$reason, "convergence_failed")
+  dropped_ids <- vapply(out$lenses_dropped, function(e) e$id, character(1))
+  dropped_reasons <- vapply(out$lenses_dropped, function(e) e$reason,
+                            character(1))
+  expect_true("abstaining_lens" %in% dropped_ids)
+  expect_identical(
+    dropped_reasons[dropped_ids == "abstaining_lens"],
+    "convergence_failed")
+})
+
+test_that("K6: the RE-unsupported synthesis abstention states the true supported corner", {
+  # Since 0.3.0 the supported corner is a single random intercept OR the MET
+  # structure of two crossed/nested intercepts (registry.R's own wording for
+  # the identical guard at lens-resolution time), not "a single random
+  # intercept on one grouping factor" as synthesise() used to claim.
+  d <- data.frame(y = rnorm(60), x = rnorm(60),
+                  g = factor(rep(1:20, each = 3)))
+  pass_bad <- koine_pass(y ~ x + (x | g), d, gaussian())
+  out <- synthesise(pass_bad)
+  expect_true(is_abstention(out))
+  expect_false(grepl("on one grouping factor", out$detail, fixed = TRUE))
+  expect_true(grepl("MET structure of two crossed/nested intercepts",
+                    out$detail, fixed = TRUE))
+})
