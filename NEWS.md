@@ -35,6 +35,12 @@
 * Added `@references` (Vehtari, Simpson, Gelman, Yao & Gabry 2024 for the
   PSIS gate; Yao, Vehtari, Simpson & Gelman 2018 for the stacking
   objective) and an `@examples` block for `is_abstention()`.
+* Fixed the new metadata-consistency test (README/`CITATION.cff` licence
+  wording) failing with an error, rather than skipping, under `R CMD check`,
+  where the source-tree files it reads are not installed alongside the
+  package.
+* Corrected `CONTRIBUTING.md`'s stale instruction to branch off a `dev`
+  branch that does not exist in this repository; it now says `main`.
 
 # koine 0.3.0
 
