@@ -18,6 +18,23 @@
   undistributed, while `DESCRIPTION` has declared `MIT + file LICENSE` since
   2026-06-08 and the package is pushed to `max578/koine`. Both now state MIT
   and the correct installation/contributing instructions.
+* Corrected the RE-unsupported synthesis abstention's `detail` text, which
+  described the supported corner as "a single random intercept on one
+  grouping factor" -- stale since the MET (two crossed/nested intercepts)
+  structure landed at 0.3.0. It now names both supported shapes.
+* Corrected a stale sentence in the *koine: the synthesised fourth opinion*
+  vignette that described the Poisson GLMM lens as "held experimental
+  pending a better-mixing sampler"; it has been enrolled (with a post-fit
+  convergence gate) since 0.2.0.
+* Typeset the MET marginal-covariance equation in the vignette as LaTeX
+  maths (previously inline code) and added two captioned, interpreted
+  figures: the two-lens stacking-weight simplex with `n_eff` annotated, and
+  the over-dispersed linear-pool envelope against the fitted data.
+* Replaced the em dash (`---`) with the house en dash (`--`) throughout
+  `README.md` and the vignette prose.
+* Added `@references` (Vehtari, Simpson, Gelman, Yao & Gabry 2024 for the
+  PSIS gate; Yao, Vehtari, Simpson & Gelman 2018 for the stacking
+  objective) and an `@examples` block for `is_abstention()`.
 
 # koine 0.3.0
 
