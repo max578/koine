@@ -76,7 +76,7 @@
 # Newton-iterates to the mode b-hat_u of f_u(b) = sum_{i in u} loglik(y_i,
 # eta_i + b) + log N(b | 0, tau^2) using the family's canonical-link score /
 # information, scales standard Gauss-Hermite nodes by the local curvature, and
-# returns the per-unit log marginal log integral exp(f_u(b)) db. FIXED Gauss-
+# yields the per-unit log marginal log integral exp(f_u(b)) db. FIXED Gauss-
 # Hermite is non-convergent for sharply-peaked count integrands (the Poisson
 # group marginal); centring the nodes on the integrand makes the quadrature
 # accurate with few nodes. The quadrature still converges to the exact integral

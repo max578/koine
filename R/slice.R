@@ -30,8 +30,8 @@
 #   m_step    cap on stepping-out expansions in each direction (bounds the work)
 #   lower/upper  hard support bounds (default unbounded)
 #
-# Returns the new position. Each call uses the ambient RNG, so a set.seed upstream
-# makes the whole chain reproducible (the determinism contract).
+# The new position is the value. Each call uses the ambient RNG, so a set.seed
+# upstream makes the whole chain reproducible (the determinism contract).
 .slice_1d <- function(logf, x0, w = 1, m_step = 50L, lower = -Inf,
                       upper = Inf) {
   f0 <- logf(x0)
