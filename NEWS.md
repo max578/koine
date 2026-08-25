@@ -13,6 +13,11 @@
   structure (two crossed/nested intercepts) as in-corner, add the `groups`
   argument to the IR-mapping table, and correct the stale version/licence
   status block.
+* Corrected a licence-metadata contradiction: `README.md` and `CITATION.cff`
+  previously stated no licence was declared and the package was
+  undistributed, while `DESCRIPTION` has declared `MIT + file LICENSE` since
+  2026-06-08 and the package is pushed to `max578/koine`. Both now state MIT
+  and the correct installation/contributing instructions.
 
 # koine 0.3.0
 

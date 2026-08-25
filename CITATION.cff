@@ -16,11 +16,10 @@ authors:
     orcid: "https://orcid.org/0000-0001-9680-8474"
 repository-code: "https://github.com/max578/koine"
 url: "https://github.com/max578/koine"
+license: MIT
 keywords:
   - Bayesian inference
   - model stacking
   - triangulation
   - simulation-based calibration
   - R
-# No licence is declared yet (pending the required consultation); a licence
-# field will be added once the licence is chosen.

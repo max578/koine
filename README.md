@@ -24,10 +24,16 @@ predictive opinion or a structured abstention.
 
 ## Installation
 
-koine is in early development and is not yet distributed. From a local clone:
+koine is distributed through the private repository `max578/koine`:
 
 ```r
 # install.packages("pak")
+pak::pak("max578/koine")
+```
+
+or from a local clone:
+
+```r
 pak::local_install(".")
 ```
 
@@ -94,16 +100,13 @@ simulation-based calibration and an exact grid-based reference-posterior check
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[Code of Conduct](CODE_OF_CONDUCT.md). In short: branch off `dev`, keep
+[Code of Conduct](CODE_OF_CONDUCT.md). In short: branch off `main`, keep
 `R CMD check --as-cran` clean, add a `NEWS.md` bullet for user-facing changes,
 and reference the issue a pull request closes with `Fixes #<n>`.
 
 ## Licence
 
-**No licence is declared yet.** The package is local-only and not distributed
-while this is the case. A licence will be chosen only after the required
-consultation among the interested parties has taken place; until then, please do
-not redistribute koine in whole or in part. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE) / [LICENSE.md](LICENSE.md).
 
 ## Citation
 
