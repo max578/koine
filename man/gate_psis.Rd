@@ -28,3 +28,8 @@ fit <- fit_dram(pass, n_iter = 600L, n_burn = 300L, n_chains = 2L)
 gate_psis(assemble_loglik(list(fit), pass))
 }
 }
+\references{
+Vehtari, A., Simpson, D., Gelman, A., Yao, Y., & Gabry, J.
+(2024). Pareto smoothed importance sampling. \emph{Journal of Machine
+Learning Research}, 25(72), 1-58.
+}

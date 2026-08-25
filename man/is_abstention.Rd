@@ -15,3 +15,9 @@ is_abstention(x)
 \description{
 Is this object an abstention?
 }
+\examples{
+out <- abstention("no_diverse_battery", scope = "synthesis",
+                  detail = "only one opinion lens resolved.")
+is_abstention(out)
+is_abstention(42)
+}

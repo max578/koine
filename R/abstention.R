@@ -72,6 +72,11 @@ abstention <- function(reason,
 #' @param x Any object.
 #' @return `TRUE` if `x` is a `koine_abstention`.
 #' @export
+#' @examples
+#' out <- abstention("no_diverse_battery", scope = "synthesis",
+#'                   detail = "only one opinion lens resolved.")
+#' is_abstention(out)
+#' is_abstention(42)
 is_abstention <- function(x) inherits(x, "koine_abstention")
 
 #' @export
