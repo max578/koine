@@ -1,5 +1,14 @@
 # koine (development version)
 
+* The package vignette, now titled *A second opinion for a mixed model*,
+  was restructured to the orchestra's vignette quality bar: a stated
+  question, a fixed Why/What/Do/Read/Limits/What-to-read-next/Reproduce
+  shape, every fitted example shrunk to render in under two minutes,
+  captioned colourblind-safe `ggplot2` figures in place of base graphics,
+  tables through `knitr::kable()`, and a stated limit that the
+  random-effects lenses' fixed `N(0, 5)` coefficient prior dominates on
+  raw-scale (tens- or hundreds-scale) responses unless the caller
+  standardises the response and covariates before building the pass.
 * **Fix**: `synthesise()` no longer silently drops a lens that abstains at
   fit time. Previously the fit-time `koine_abstention` a lens returns had no
   `$status` field, so the "contributed" filter dropped it without recording
