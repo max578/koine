@@ -8,6 +8,7 @@ reference:
   desc: The engine-neutral request, the evaluable family adapter, and the uniform lens-output contract.
   contents:
   - koine_pass
+  - koine_can_contribute
   - as_family_spec
   - family_spec
   - fb_fit
@@ -45,6 +46,7 @@ reference:
 - title: Synthesis and gate
   contents:
   - synthesise
+  - koine_opinion_draws
   - assemble_loglik
   - gate_psis
   - stack_opinion
