@@ -1,6 +1,6 @@
 Package: koine
 Title: Synthesised Fourth Opinion for Bayesian Triangulation
-Version: 0.3.0
+Version: 0.3.1
 Authors@R: person(
     given = "Max",
     family = "Moldovan",
