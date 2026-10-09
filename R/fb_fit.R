@@ -14,7 +14,7 @@
 #' @param provenance A `koine_provenance` record (mandatory, F4).
 #' @param exactness `"exact"`, `"approximate"`, or `"resampled"`.
 #' @param sample_stats Optional `posterior::draws_array` of HMC-style sample
-#'   statistics; honest `NULL` for non-HMC lenses (F2).
+#'   statistics; `NULL` for non-HMC lenses (F2).
 #' @param log_likelihood Optional `array[chain, draw, obs_id]`; usually `NULL`
 #'   at construction and filled by [assemble_loglik()] (F3).
 #' @param posterior_predictive Optional predictive draws array.
@@ -61,7 +61,7 @@ fb_fit <- function(draws, provenance,
 #' Enforces: a contributed fit carries draws + a complete provenance tuple (F4);
 #' `exactness` agrees between the fit and its provenance; an abstained fit
 #' carries an `koine_abstention` and no draws; `sample_stats`/`log_likelihood`
-#' are either `NULL` or arrays (no fabricated placeholders, I1).
+#' are either `NULL` or arrays (no fabricated values, I1).
 #'
 #' @param x A `koine_fb_fit`.
 #' @return `x`, invisibly, if valid; otherwise stops.

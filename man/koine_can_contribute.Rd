@@ -30,7 +30,7 @@ the abstention taxonomy otherwise (\code{"feature_unsupported"},
 \code{"no_diverse_battery"}, or \code{"pass_invalid"} for a malformed model). Because
 the PSIS reliability gate and weight-degeneracy check can only be evaluated
 after fitting, a \code{TRUE} here is necessarily optimistic: koine may still abstain
-at \code{\link[=synthesise]{synthesise()}} time. The predicate is the honest \emph{floor}, not a guarantee.
+at \code{\link[=synthesise]{synthesise()}} time. The predicate is a \emph{floor}, not a guarantee.
 }
 \examples{
 d <- data.frame(y = rnorm(40), x = rnorm(40))

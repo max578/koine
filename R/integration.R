@@ -33,7 +33,7 @@
 #' `"no_diverse_battery"`, or `"pass_invalid"` for a malformed model). Because
 #' the PSIS reliability gate and weight-degeneracy check can only be evaluated
 #' after fitting, a `TRUE` here is necessarily optimistic: koine may still abstain
-#' at [synthesise()] time. The predicate is the honest *floor*, not a guarantee.
+#' at [synthesise()] time. The predicate is a *floor*, not a guarantee.
 #'
 #' @param formula,data,family As for [koine_pass()].
 #' @param resources A resources list (see [koine_pass()]); defaults to tier 1.

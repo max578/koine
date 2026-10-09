@@ -26,7 +26,7 @@ the fit and set \code{exactness = "resampled"}.}
 \item{exactness}{\code{"exact"}, \code{"approximate"}, or \code{"resampled"}.}
 
 \item{sample_stats}{Optional \code{posterior::draws_array} of HMC-style sample
-statistics; honest \code{NULL} for non-HMC lenses (F2).}
+statistics; \code{NULL} for non-HMC lenses (F2).}
 
 \item{log_likelihood}{Optional \code{array[chain, draw, obs_id]}; usually \code{NULL}
 at construction and filled by \code{\link[=assemble_loglik]{assemble_loglik()}} (F3).}

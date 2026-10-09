@@ -15,7 +15,7 @@ Description: Synthesises one coherent, independent predictive opinion for a
     space (leave-one-out stacking, PSIS-gated) on an axis orthogonal to the
     engine axis, never averaging the engines. Predictive opinions are exchanged
     through an ArviZ-style 'DataTree' 'NetCDF' interchange so no live 'Python'
-    is required at read time. Abstention is a first-class, honest outcome.
+    is required at read time. Abstention is a first-class outcome.
 URL: https://github.com/max578/koine
 BugReports: https://github.com/max578/koine/issues
 License: MIT + file LICENSE

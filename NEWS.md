@@ -128,7 +128,7 @@
   (`convergence_failed`, a new first-class abstention reason --- too few effective
   draws or chains that disagree) rather than contribute a badly-mixed opinion.
   koine contributes a calibrated Poisson opinion where the variance component is
-  identifiable, and abstains where it is not (a first-class honest outcome, SS3).
+  identifiable, and abstains where it is not (a first-class outcome, SS3).
 
 # koine 0.1.1
 
@@ -250,15 +250,14 @@ First development scaffold --- the Stage-1 increment-1 spine.
   lenses survive.
 * The dual-reader NetCDF interchange (`read_idata_nc()`, RNetCDF canonical with
   an ncdf4 fallback), enforcing the four hard read assertions.
-* Abstention (`abstention()`) and the typed error taxonomy as first-class,
-  honest outcomes.
+* Abstention (`abstention()`) and the typed error taxonomy as first-class outcomes.
 * The full Stage-1 battery across three diversity axes: four inference-family
   witnesses (DRAM, NIMBLE-Gibbs, Polya-Gamma Gibbs, DREAM_ZS), a heavy-tail
   structure variant (`fit_robust_t()`), and a shrinkage spectrum
   (`fit_ridge()` / `fit_lasso()` / `fit_horseshoe()`), with the
   weight-concentration diagnostic and the `weight_degenerate` abstention.
 * The diagnostic layer is complete: alongside weight concentration,
-  `linear_pool_envelope()` reports an over-dispersed honest reference bracket
+  `linear_pool_envelope()` reports an over-dispersed reference bracket
   and flags disagreeing lenses leave-one-out, and `evidence_axis()` reports
   per-lens marginal likelihoods (bridge sampling, prior-conditional). Both carry
   `role = "diagnostic"` and are surfaced by `synthesise()`, never pooled into

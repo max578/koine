@@ -140,7 +140,7 @@
 #' Per-observation integrated random-effect predictive (Stage-2)
 #'
 #' Computes `log integral p(y_i | linkinv(eta_fixed_i + b)) N(b | 0, tau^2) db`
-#' for every observation --- the honest predictive density for a *new*
+#' for every observation --- the predictive density for a *new*
 #' observation with its random effect marginalised out. Analytic for the
 #' identity-link Gaussian LMM; Gauss-Hermite quadrature otherwise. This is the
 #' quantity every RE lens is stacked on, so the LOO weights are comparable
@@ -324,7 +324,7 @@
 
 # Per-observation integrated predictive for a Gaussian LMM with t_nu random
 # intercepts: log E_lambda[ N(y_i | eta_fixed_i, sigma^2 + tau^2 / lambda) ],
-# the honest predictive for a new observation whose heavy-tailed random effect
+# the predictive for a new observation whose heavy-tailed random effect
 # is marginalised out.
 .re_integrated_loglik_t <- function(y, eta_fixed, tau, sigma, nu, mix = NULL) {
   if (is.null(mix)) {
@@ -438,7 +438,7 @@
 #' Per-observation integrated predictive for a crossed/nested Gaussian MET model
 #'
 #' For a *new* observation the random effect of every grouping is drawn afresh
-#' and marginalised, so the honest predictive is
+#' and marginalised, so the predictive is
 #' `N(y_i | eta_fixed_i, sigma^2 + sum_r tau_r^2)` --- the same held-out target
 #' every MET lens is stacked on, keeping the leave-one-out PSIS gate in its
 #' reliable regime (the analogue of the single-RE integrated predictive).

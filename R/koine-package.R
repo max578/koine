@@ -12,7 +12,7 @@
 ## that document.
 ##
 ## Two cardinal invariants hold everywhere (Stage-0 SS1):
-##   I1  Honest representation  --- never fabricate a value not computed;
+##   I1  Faithful representation  --- never fabricate a value not computed;
 ##                                  absence is an explicit NULL plus a reason.
 ##   I2  Predictive space only  --- combination happens on p(y-tilde | .); never
 ##                                  average parameter posteriors across

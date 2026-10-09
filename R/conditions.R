@@ -5,7 +5,7 @@
 ##   * an *error* signals a contract violation (a bug, a malformed input, a
 ##     broken NetCDF file). It halts with a typed condition and is never
 ##     swallowed (charter hard-rule 2).
-##   * an *abstention* is a normal, honest outcome (no diverse battery, an
+##   * an *abstention* is a normal outcome (no diverse battery, an
 ##     unsupported family, an unreliable PSIS gate). It is a value, not a
 ##     condition --- see `abstention()`.
 ## ----------------------------------------------------------------------------

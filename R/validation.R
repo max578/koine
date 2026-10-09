@@ -4,7 +4,7 @@
 ## A koine-first lens vouches for its own correctness, which weakens the
 ## "agreement across independent implementations is evidence" story. So a
 ## koine-authored lens must clear an assessment gate before it may contribute to
-## triangulation, and it carries an honest maturity tier:
+## triangulation, and it carries a maturity tier:
 ##
 ##   reference-validated  >  koine-implemented-validated  >  experimental
 ##

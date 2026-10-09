@@ -20,7 +20,7 @@ A length-\code{N} vector of integrated pointwise log-likelihoods.
 }
 \description{
 For a \emph{new} observation the random effect of every grouping is drawn afresh
-and marginalised, so the honest predictive is
+and marginalised, so the predictive is
 \verb{N(y_i | eta_fixed_i, sigma^2 + sum_r tau_r^2)} --- the same held-out target
 every MET lens is stacked on, keeping the leave-one-out PSIS gate in its
 reliable regime (the analogue of the single-RE integrated predictive).

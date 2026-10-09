@@ -1,8 +1,8 @@
 ## ----------------------------------------------------------------------------
-## Abstention --- a first-class, honest outcome (Stage-0 SS8)
+## Abstention --- a first-class outcome (Stage-0 SS8)
 ##
 ## koine returns an `abstention` (a value, not a condition) whenever a coherent
-## fourth opinion cannot be justified. Honest under-claiming beats a wrong
+## fourth opinion cannot be justified. Stating less beats a wrong
 ## fourth opinion. The reason set is closed: adding a reason is a contract
 ## change.
 ## ----------------------------------------------------------------------------
@@ -38,7 +38,7 @@
 #' @param scope Either `"synthesis"` (the whole opinion) or `"lens"` (a single
 #'   lens declined).
 #' @param detail Human-readable explanation. Required --- an abstention with no
-#'   detail is itself dishonest (I1).
+#'   detail is itself misleading (I1).
 #' @param lenses_dropped Optional list of `list(id =, reason =)` records for
 #'   lenses dropped before the abstention.
 #' @return An object of class `koine_abstention`.

@@ -18,7 +18,7 @@ abstention(
 lens declined).}
 
 \item{detail}{Human-readable explanation. Required --- an abstention with no
-detail is itself dishonest (I1).}
+detail is itself misleading (I1).}
 
 \item{lenses_dropped}{Optional list of \code{list(id =, reason =)} records for
 lenses dropped before the abstention.}

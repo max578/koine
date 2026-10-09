@@ -16,7 +16,7 @@ validate_fb_fit(x)
 Enforces: a contributed fit carries draws + a complete provenance tuple (F4);
 \code{exactness} agrees between the fit and its provenance; an abstained fit
 carries an \code{koine_abstention} and no draws; \code{sample_stats}/\code{log_likelihood}
-are either \code{NULL} or arrays (no fabricated placeholders, I1).
+are either \code{NULL} or arrays (no fabricated values, I1).
 }
 \examples{
 set.seed(1)

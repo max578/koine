@@ -55,7 +55,7 @@ res
 predictive opinion, the PSIS gate report, the diagnostic layer (weight
 concentration, the over-dispersed linear-pool envelope, and the
 prior-conditional evidence axis), and an independence report -- or a
-first-class `koine_abstention`. Honest under-claiming beats a wrong fourth
+first-class `koine_abstention`. Stating less beats a wrong fourth
 opinion.
 
 The battery spans three diversity axes: inference-family witnesses (DRAM,

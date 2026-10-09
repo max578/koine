@@ -3,7 +3,7 @@
 koine's *open-arms* posture lets it implement a method before its authors ship a
 reference implementation. A koine-authored lens therefore vouches for its own
 correctness, which weakens the "agreement across independent implementations is
-evidence" story. To keep the fourth opinion honest, every koine-authored lens
+evidence" story. To keep the fourth opinion sound, every koine-authored lens
 must clear an assessment gate before it may contribute to triangulation, and it
 carries a maturity tier:
 

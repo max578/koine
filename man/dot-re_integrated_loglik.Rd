@@ -24,7 +24,7 @@ A length-\code{N} vector of integrated pointwise log-likelihoods.
 }
 \description{
 Computes \verb{log integral p(y_i | linkinv(eta_fixed_i + b)) N(b | 0, tau^2) db}
-for every observation --- the honest predictive density for a \emph{new}
+for every observation --- the predictive density for a \emph{new}
 observation with its random effect marginalised out. Analytic for the
 identity-link Gaussian LMM; Gauss-Hermite quadrature otherwise. This is the
 quantity every RE lens is stacked on, so the LOO weights are comparable

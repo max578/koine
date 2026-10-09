@@ -21,7 +21,7 @@ feature support covers the formula; the log-likelihood is producible (native
 or via the family spec); the adapter is implemented in this build; and, for a
 koine-authored lens, its validation evidence is on record (the open-arms
 correctness gate, SS11 --- an unvalidated first-mover abstains). A lens that
-fails any test is excluded \emph{with a recorded reason} --- an honest, logged
+fails any test is excluded \emph{with a recorded reason} --- a logged
 absence, not an error (I1).
 }
 \examples{

@@ -219,7 +219,7 @@ koine_stage1_registry <- function() {
       # rather than contribute a badly-mixed opinion. koine thus contributes a
       # calibrated Poisson opinion where the variance component is identifiable
       # (SBC clean over the contributing 71/80 sims: all params p > 0.16) and
-      # abstains where it is not -- a first-class honest outcome (SS3).
+      # abstains where it is not -- a first-class outcome (SS3).
       family_support = function(fs) fs$name %in%
         c("gaussian", "binomial", "poisson"),
       feature_support = .feat_re_met, emits_loglik = FALSE,
@@ -273,7 +273,7 @@ koine_stage1_registry <- function() {
 #' or via the family spec); the adapter is implemented in this build; and, for a
 #' koine-authored lens, its validation evidence is on record (the open-arms
 #' correctness gate, SS11 --- an unvalidated first-mover abstains). A lens that
-#' fails any test is excluded *with a recorded reason* --- an honest, logged
+#' fails any test is excluded *with a recorded reason* --- a logged
 #' absence, not an error (I1).
 #'
 #' @param pass A `koine_pass`.

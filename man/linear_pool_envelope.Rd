@@ -24,7 +24,7 @@ expose a comparable mean-response (no envelope is meaningful).
 }
 \description{
 An equal-weight mixture of the contributing lenses' conditional-mean
-predictives, deliberately \strong{over-dispersed} to serve as an honest reference
+predictives, deliberately \strong{over-dispersed} to serve as a reference
 bracket rather than a confident prediction. For each observation the envelope
 half-width combines the average within-lens posterior uncertainty with the
 between-lens disagreement, the latter inflated by \code{inflate} (default 2). The

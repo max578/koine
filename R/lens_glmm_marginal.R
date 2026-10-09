@@ -267,7 +267,7 @@
 ## out, the usual non-centred remedy is unavailable. The lens does not pretend
 ## otherwise: the fit then under-mixes the variance component, and a post-fit
 ## convergence gate (`fit_glmm_marginal`) makes the lens ABSTAIN rather than
-## contribute a badly-mixed opinion (a first-class, honest outcome, SS3). koine
+## contribute a badly-mixed opinion (a first-class outcome, SS3). koine
 ## contributes a calibrated Poisson opinion where the variance component is
 ## identifiable, and abstains where it is not.
 ##
@@ -654,7 +654,7 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 1500L,
   # than contribute a badly-mixed opinion, the lens ABSTAINS when the fit has not
   # converged: too few effective draws of any parameter (the funnel collapses
   # ess_tau to ~3 against ~100+ in the identifiable regime) or chains that disagree
-  # (rhat > 1.1). This is a first-class, honest outcome (SS3) --- koine contributes
+  # (rhat > 1.1). This is a first-class outcome (SS3) --- koine contributes
   # a calibrated Poisson opinion where the variance component is identifiable, and
   # abstains where it is not. The Gaussian/binomial joint-NUTS path mixes cleanly
   # and is not gated here (its divergences are surfaced in the trace).
@@ -679,7 +679,7 @@ fit_glmm_marginal <- function(pass, lens_spec = NULL, n_iter = 1500L,
     }
   }
   # The Gaussian LMM marginal is exact; the GLMM marginal is a quadrature
-  # approximation --- reported honestly per family (I1).
+  # approximation --- reported per family (I1).
   exact <- if (lay$has_sigma) "exact" else "approximate"
   prov <- provenance_record(
     method = lens_spec$id, method_version = "0.1.0", impl_language = "R",

@@ -5,7 +5,7 @@
 ##   1. engine-weight concentration --- `weight_concentration()` (synthesise.R),
 ##      the in-stack degeneracy check; applied here to the contributing lenses.
 ##   2. linear-pool envelope        --- `linear_pool_envelope()`, an
-##      over-dispersed honest reference bracket; flags lenses that disagree.
+##      over-dispersed reference bracket; flags lenses that disagree.
 ##   3. evidence axis               --- `evidence_axis()`, per-lens marginal
 ##      likelihood (bridge sampling); role = "diagnostic", NEVER stacked.
 ##
@@ -43,7 +43,7 @@
 #' Linear-pool envelope diagnostic (Stage-0 SS9.2)
 #'
 #' An equal-weight mixture of the contributing lenses' conditional-mean
-#' predictives, deliberately **over-dispersed** to serve as an honest reference
+#' predictives, deliberately **over-dispersed** to serve as a reference
 #' bracket rather than a confident prediction. For each observation the envelope
 #' half-width combines the average within-lens posterior uncertainty with the
 #' between-lens disagreement, the latter inflated by `inflate` (default 2). The
@@ -174,7 +174,7 @@ evidence_axis <- function(fb_fits, pass, beta_prior_sd = 5,
   if (isTRUE(pass$has_re) && identical(pass$re_structure, "met")) {
     # The single-variance-component bridge marginal below cannot score a MET
     # model's two crossed/nested variance components; the diagnostic declines the
-    # MET case honestly rather than score the wrong (single-RE) marginal (I1).
+    # MET case rather than score the wrong (single-RE) marginal (I1).
     return(list(available = FALSE, prior_conditional = TRUE,
                 role = "diagnostic",
                 note = paste0("evidence axis not available for the MET ",
