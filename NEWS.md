@@ -1,4 +1,4 @@
-# koine (development version)
+# koine 0.3.1
 
 * The package vignette, now titled *A second opinion for a mixed model*,
   was restructured to the orchestra's vignette quality bar: a stated
@@ -50,6 +50,7 @@
   package.
 * Corrected `CONTRIBUTING.md`'s stale instruction to branch off a `dev`
   branch that does not exist in this repository; it now says `main`.
+* Added `inst/CITATION`, so `citation("koine")` returns a reference.
 
 # koine 0.3.0
 
@@ -94,7 +95,7 @@
   `data_ungrounded` and `provenance_unverified` (Independent Oracle Principle).
   A converged, high-ESS lens fit on an ungrounded input still carries that
   input's ungroundedness; these let a lens decline on a *fact* failure
-  (an input tagged `[unverified]` per the orchestra provenance vocabulary), not
+  (an input marked ungrounded in the orchestra provenance vocabulary), not
   only on the existing numerical failures (convergence, calibration, ESS).
 * **Fixed a latent NIMBLE compile failure for an intercept-only fixed part**
   (`K = 1`). NIMBLE's `inprod()` over a length-1 vector generates non-compiling
@@ -149,8 +150,7 @@
 First tagged release --- the version carrying the IR-targetable, re-entrant model
 builder (`koine_pass_from_design()`) and the integration surface a parent
 triangulation panel drives, so koine clears the backend contract's construction,
-output, and determinism clauses. Licence declared **MIT**. Local-only,
-pre-graduation (the GRDC consultation is deferred to graduation, not a blocker).
+output, and determinism clauses. Licence declared **MIT**.
 
 ## Stage-2 --- random-effects support (single random intercept)
 

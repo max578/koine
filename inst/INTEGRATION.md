@@ -34,7 +34,7 @@ lens (`R/registry.R`, the `glmm_marginal` record).
 Everything richer --- random slopes, three or more crossed groupings,
 correlated effects, factor-analytic or genomic (`vm` / `ped`) structures,
 splines, `AR1`, GxE, multivariate responses --- is **out of corner**, and
-koine abstains rather than mis-modelling it. Abstention is the honest default,
+koine abstains rather than mis-modelling it. Abstention is the expected default,
 not a failure.
 
 Use the pre-flight predicate to gate availability cheaply (it resolves the
@@ -43,7 +43,7 @@ battery but fits nothing):
 ```r
 ok <- koine::koine_can_contribute(formula, data, family)
 # TRUE, or a reason string: "feature_unsupported" / "no_diverse_battery" /
-# "pass_invalid". A TRUE is the honest floor (the PSIS gate and weight-
+# "pass_invalid". A TRUE is the minimum condition (the PSIS gate and weight-
 # degeneracy check are only knowable after fitting, so koine may still abstain
 # at synthesis time).
 ```

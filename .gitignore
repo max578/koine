@@ -17,10 +17,11 @@ CRAN-SUBMISSION
 # pkgdown output
 /docs/
 
-# AI-assistant scratch directories (AAGI canon)
+# Local editor and tool configuration
 .claude/
 .positai/
 .cursor/
 
 # OS
 .DS_Store
+CONSTELLATION_MEMBER.md

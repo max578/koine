@@ -23,8 +23,8 @@
   # numerical one. A converged, high-ESS lens fit on an un-grounded input still
   # carries that input's un-groundedness; these let a lens decline when its
   # inputs are not grounded against an external authority (orchestra provenance
-  # vocabulary token "[unverified]").
-  "data_ungrounded",      # an input data fact is un-grounded ([unverified])
+  # vocabulary token "ungrounded").
+  "data_ungrounded",      # an input data fact is un-grounded
   "provenance_unverified" # upstream provenance could not be verified
 )
 

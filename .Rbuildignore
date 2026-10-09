@@ -18,3 +18,4 @@
 ^CITATION\.cff$
 ^codemeta\.json$
 ^\.lintr$
+^CONSTELLATION_MEMBER\.md$

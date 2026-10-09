@@ -4,7 +4,7 @@
 
 test_that("the fact-grounding abstention reasons are in the closed taxonomy", {
   a <- abstention("data_ungrounded",
-                  detail = "input NDVI series carries an [unverified] provenance tag")
+                  detail = "input NDVI series carries an ungrounded provenance tag")
   expect_true(is_abstention(a))
   expect_identical(a$reason, "data_ungrounded")
 
