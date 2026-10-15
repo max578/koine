@@ -79,6 +79,7 @@ test_that("synthesise + koine_opinion_draws flow through an array-built pass", {
 })
 
 test_that("an array-built Poisson random-intercept model contributes (enrolled)", {
+  skip_if_not_installed("nimble")
   # Poisson random-intercept is now enrolled (the funnel-safe blocked kernel +
   # convergence-gated abstention); on an identifiable model the enrolment reaches
   # through the array builder and synthesises an opinion rather than abstaining
