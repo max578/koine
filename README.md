@@ -1,4 +1,10 @@
-# koine
+# koine <img src="man/figures/logo.png" align="right" height="139" alt="koine logo" />
+
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/max578/koine/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/max578/koine/actions/workflows/R-CMD-check.yaml)
+[![Codecov test coverage](https://codecov.io/gh/max578/koine/graph/badge.svg)](https://app.codecov.io/gh/max578/koine)
+[![r-universe](https://max578.r-universe.dev/badges/koine)](https://max578.r-universe.dev/koine)
+<!-- badges: end -->
 
 > The synthesised fourth opinion for Bayesian triangulation.
 
@@ -22,9 +28,25 @@ koine is **programmatic infrastructure**: it exposes no user-facing modelling
 verbs. A caller hands it an engine-neutral request and receives a synthesised
 predictive opinion or a structured abstention.
 
+## Related packages
+
+- [loo](https://CRAN.R-project.org/package=loo) computes approximate
+  leave-one-out cross-validation for Bayesian models with Pareto smoothed
+  importance sampling, and gives stacking weights for averaging their
+  predictive distributions.
+- [BAS](https://CRAN.R-project.org/package=BAS) does Bayesian variable
+  selection and model averaging for linear and generalised linear models.
+
+koine uses loo's leave-one-out estimates and stacks in the same way, but
+over models it fits itself: a set of inference methods, a heavy-tailed
+variant and a range of shrinkage priors.
+The result is one more opinion to set beside your own fitted model, not a
+replacement for it, and koine returns an abstention when the set adds
+nothing new.
+
 ## Installation
 
-koine is distributed through the private repository `max578/koine`:
+koine is distributed through the GitHub repository `max578/koine`:
 
 ```r
 # install.packages("pak")

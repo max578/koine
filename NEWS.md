@@ -1,3 +1,10 @@
+# koine (development version)
+
+* The package has a logo.
+* README lists related packages and carries check, coverage and r-universe
+  badges.
+* CI runs lintr (report-only) and test coverage.
+
 # koine 0.3.1
 
 * The package vignette, now titled *A second opinion for a mixed model*,

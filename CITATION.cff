@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use koine, please cite it as below."
 type: software
 title: "koine: Synthesised Fourth Opinion for Bayesian Triangulation"
-version: 0.3.1
+version: 0.3.1.9000
 abstract: >-
   Synthesises one coherent, independent predictive opinion for a Bayesian model
   from a curated battery of known and underutilised inference methods, or

@@ -6,6 +6,8 @@
 \alias{koine-package}
 \title{koine: Synthesised Fourth Opinion for Bayesian Triangulation}
 \description{
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
 Synthesises one coherent, independent predictive opinion for a Bayesian model from a curated battery of known and underutilised inference methods, or abstains when no diversity gain exists. Built to serve as a fourth, synthesised witness alongside an independent panel of inference engines: it stacks over model-structure and method diversity in predictive space (leave-one-out stacking, PSIS-gated) on an axis orthogonal to the engine axis, never averaging the engines. Predictive opinions are exchanged through an ArviZ-style 'DataTree' 'NetCDF' interchange so no live 'Python' is required at read time. Abstention is a first-class outcome.
 }
 \seealso{
