@@ -1,6 +1,9 @@
 # Test-coverage workflow for koine.
 # Source: r-lib/actions test-coverage template (v2).
 # Runs covr on one ubuntu/R-release job and uploads to Codecov.
+# nimble is removed before the run: covr inserts `if` calls into the NIMBLE
+# model code, which NIMBLE rejects. Its tests skip and the NIMBLE lenses count
+# as uncovered; R-CMD-check runs them with nimble installed.
 
 on:
   push:
@@ -33,6 +36,10 @@ jobs:
         with:
           extra-packages: any::covr, any::xml2
           needs: coverage
+
+      - name: Remove nimble
+        run: remove.packages("nimble")
+        shell: Rscript {0}
 
       - name: Test coverage
         run: |
