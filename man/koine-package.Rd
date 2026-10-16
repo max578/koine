@@ -14,6 +14,7 @@ Synthesises one coherent, independent predictive opinion for a Bayesian model fr
 Useful links:
 \itemize{
   \item \url{https://github.com/max578/koine}
+  \item \url{https://max578.github.io/koine/}
   \item Report bugs at \url{https://github.com/max578/koine/issues}
 }
 
