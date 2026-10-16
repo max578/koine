@@ -19,9 +19,8 @@ jobs:
       fail-fast: false
       matrix:
         config:
-        # macOS (10x) and Windows (2x) runners are billed at multiples on a private
-        # repository and exhausted the account's monthly minutes on 2026-08-25;
-        # Linux-only until the repository is public or a release tag re-enables them.
+          - {os: macos-latest,   r: 'release'}
+          - {os: windows-latest, r: 'release'}
           - {os: ubuntu-latest,  r: 'devel', http-user-agent: 'release'}
           - {os: ubuntu-latest,  r: 'release'}
           - {os: ubuntu-latest,  r: 'oldrel-1'}
