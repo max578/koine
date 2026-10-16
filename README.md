@@ -1,9 +1,11 @@
 # koine <img src="man/figures/logo.png" align="right" height="139" alt="koine logo" />
 
 <!-- badges: start -->
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/max578/koine/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/max578/koine/actions/workflows/R-CMD-check.yaml)
 [![Codecov test coverage](https://codecov.io/gh/max578/koine/graph/badge.svg)](https://app.codecov.io/gh/max578/koine)
 [![r-universe](https://max578.r-universe.dev/badges/koine)](https://max578.r-universe.dev/koine)
+[![pkgdown](https://github.com/max578/koine/actions/workflows/pkgdown.yaml/badge.svg)](https://max578.github.io/koine/)
 <!-- badges: end -->
 
 > The synthesised fourth opinion for Bayesian triangulation.
